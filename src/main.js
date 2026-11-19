@@ -2,6 +2,7 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene.js';
 import { MainMenuScene } from './scenes/MainMenuScene.js';
+import { SanctuaryScene } from './scenes/SanctuaryScene.js';
 import { DungeonScene } from './scenes/DungeonScene.js';
 import { HudScene } from './scenes/HudScene.js';
 
@@ -29,7 +30,7 @@ const config = {
       debug: false
     }
   },
-  scene: [BootScene, MainMenuScene, DungeonScene, HudScene]
+  scene: [BootScene, MainMenuScene, SanctuaryScene, DungeonScene, HudScene]
 };
 
 const game = new Phaser.Game(config);

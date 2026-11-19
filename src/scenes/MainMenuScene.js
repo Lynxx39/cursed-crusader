@@ -2,6 +2,7 @@
 import Phaser from 'phaser';
 import { SoundSynth } from '../core/SoundSynth.js';
 import { RELIC_DATABASE } from '../systems/RelicSystem.js';
+import { metaProgression } from '../systems/MetaProgression.js';
 
 export class MainMenuScene extends Phaser.Scene {
   constructor() {
@@ -32,6 +33,17 @@ export class MainMenuScene extends Phaser.Scene {
         this.add.image(x + 16, 440, 'tile_floor').setAlpha(0.7);
       }
     }
+
+    // Blood Quartz Currency Banner (Top Right)
+    const quartzVal = metaProgression.getBloodQuartz();
+    this.add.text(width - 24, 24, `🩸 BLOOD QUARTZ: ${quartzVal}`, {
+      fontFamily: 'monospace',
+      fontSize: '13px',
+      fontStyle: 'bold',
+      color: '#f87171',
+      stroke: '#05070a',
+      strokeThickness: 3
+    }).setOrigin(1, 0);
 
     // 2. Animated Crusader Knight Silhouette on Pedestal
     if (this.anims.exists('player-idle')) {
@@ -86,12 +98,17 @@ export class MainMenuScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     // 5. Interactive Skul-Style Menu Options
-    const startY = 225;
+    const startY = 210;
     const menuItems = [
       {
         text: '▶ START EXPEDITION',
         color: '#fde047',
         action: () => this.startExpedition()
+      },
+      {
+        text: '🔮 THE DARK SANCTUARY (UPGRADES)',
+        color: '#c084fc',
+        action: () => this.scene.start('sanctuary')
       },
       {
         text: '⚔ CONTROLS & COMBAT GUIDE',
@@ -100,13 +117,13 @@ export class MainMenuScene extends Phaser.Scene {
       },
       {
         text: '❖ RELIC COMPENDIUM',
-        color: '#c084fc',
+        color: '#a855f7',
         action: () => this.showRelicsModal()
       }
     ];
 
     menuItems.forEach((item, index) => {
-      this.createMenuButton(width / 2 + 100, startY + index * 52, item.text, item.color, item.action);
+      this.createMenuButton(width / 2 + 100, startY + index * 48, item.text, item.color, item.action);
     });
 
     // Support keyboard shortcuts (SPACE / ENTER) to quickly launch expedition
@@ -205,15 +222,14 @@ export class MainMenuScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     const guideContent = [
-      '• MOVEMENT: [A / D] or [ARROW KEYS]',
-      '• JUMP / DOUBLE JUMP: [W] or [SPACEBAR] (Air jump restores on ground)',
-      '• DASH (I-FRAMES): [LEFT SHIFT] or [L] or [C] (Invulnerable through attacks)',
-      '• SWORD CLEAVE: [LEFT MOUSE BUTTON] or [J] (3-hit combo sequence)',
-      '• PARRY (COUNTER-STRIKE): [RIGHT MOUSE BUTTON] or [K]',
-      '  -> Parrying melee or projectiles freezes enemies & grants +25 Corruption!',
-      '• BEAST AWAKENING: [U] (When Corruption meter reaches 100%)',
-      '  -> Grants +60% movement speed, ferocious claws, & screen-clearing finisher [I]',
-      '• GATES OF DESTINY: [W] or [E] or [CLICK] on Gates when chamber is purified'
+      '• MOVEMENT: [A / D] | JUMP: [W] or [SPACEBAR] (Double Jump)',
+      '• SWORD CLEAVE: [LEFT MOUSE BUTTON] or [J] (3-hit directional combo)',
+      '• DASH (I-FRAMES): [RIGHT MOUSE BUTTON] or [LEFT SHIFT] or [L]',
+      '• PARRY (COUNTER-STRIKE): [K] or [X] (Reflects projectiles, staggers foes)',
+      '• CONSUME POTION: [F] (Restores 45% Max HP)',
+      '• SKUL / FORM SWAP: [TAB] or [C] (Toggle Crusader / Berserker with burst shockwave!)',
+      '• BEAST AWAKENING: [U] (At 100% Corruption, screen finisher [I])',
+      '• THE DARK SANCTUARY: Spend Blood Quartz on permanent meta upgrades!'
     ].join('\n\n');
 
     const bodyText = this.add.text(width / 2, height / 2 + 5, guideContent, {

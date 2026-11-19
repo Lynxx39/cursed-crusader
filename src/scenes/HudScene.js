@@ -1,6 +1,7 @@
 // HudScene.js - Event-Driven Parallel HUD Overlay with Skul-Style Relic Choice Modal & Boss Bar
 import Phaser from 'phaser';
 import { EventBus } from '../core/EventBus.js';
+import { MetaProgression } from '../systems/MetaProgression.js';
 
 export class HudScene extends Phaser.Scene {
   constructor() {
@@ -8,8 +9,10 @@ export class HudScene extends Phaser.Scene {
   }
 
   create() {
+    const meta = MetaProgression.getInstance();
+
     this.createHealthAndCorruptionBars();
-    this.createRunStats();
+    this.createRunStats(meta.bloodQuartz);
     this.createRelicsDisplay();
     this.createNotificationBanner();
     this.createBossBar();
@@ -27,6 +30,10 @@ export class HudScene extends Phaser.Scene {
       EventBus.on('room:cleared', () => this.showRoomCleared()),
       EventBus.on('room:entered', (num) => this.updateRoomNumber(num)),
       EventBus.on('gold:changed', (amt) => this.updateGold(amt)),
+      EventBus.on('quartz:changed', (amt) => this.updateQuartz(amt)),
+      EventBus.on('potion:changed', (data) => this.updatePotion(data.current, data.max)),
+      EventBus.on('form:swapped', (data) => this.updateForm(data.form)),
+      EventBus.on('swap:cooldown', (data) => this.updateSwapCooldown(data.current)),
       EventBus.on('enemies:count', (cnt) => this.updateEnemyCount(cnt)),
       EventBus.on('boss:spawned', (bossData) => this.showBossBar(bossData)),
       EventBus.on('boss:hp_changed', (data) => this.updateBossHp(data)),
@@ -102,13 +109,24 @@ export class HudScene extends Phaser.Scene {
     });
 
     // Beast Active Header
-    this.beastStatusText = this.add.text(barX, corrY + 20, '', {
+    this.beastStatusText = this.add.text(barX, corrY + 34, '', {
       fontFamily: 'Cinzel, monospace', fontSize: '11px', fontStyle: 'bold', color: '#ef4444',
       stroke: '#05070a', strokeThickness: 4
     }).setOrigin(0, 0.5).setVisible(false).setDepth(25);
+
+    // Consumable Potion & Form Swap Tracker
+    this.potionText = this.add.text(barX, corrY + 18, '🧪 [F] POTION: 2/2', {
+      fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#4ade80',
+      stroke: '#05070a', strokeThickness: 3
+    }).setOrigin(0, 0.5).setDepth(24);
+
+    this.swapFormText = this.add.text(barX + 115, corrY + 18, '🛡️ [TAB] CRUSADER', {
+      fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#38bdf8',
+      stroke: '#05070a', strokeThickness: 3
+    }).setOrigin(0, 0.5).setDepth(24);
   }
 
-  createRunStats() {
+  createRunStats(initialQuartz = 0) {
     const rightX = 940;
     // Gilded Coin Icon next to gold
     if (this.textures.exists('icon_gold_coin')) {
@@ -128,6 +146,39 @@ export class HudScene extends Phaser.Scene {
       fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold', color: '#f87171',
       stroke: '#05070a', strokeThickness: 3
     }).setOrigin(1, 0).setDepth(21);
+
+    this.quartzText = this.add.text(rightX, 80, `🩸 QUARTZ: ${initialQuartz}`, {
+      fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold', color: '#f43f5e',
+      stroke: '#05070a', strokeThickness: 3
+    }).setOrigin(1, 0).setDepth(21);
+  }
+
+  updatePotion(current, max) {
+    if (this.potionText) {
+      this.potionText.setText(`🧪 [F] POTION: ${current}/${max}`);
+      this.potionText.setColor(current > 0 ? '#4ade80' : '#94a3b8');
+    }
+  }
+
+  updateQuartz(amt) {
+    if (this.quartzText) {
+      this.quartzText.setText(`🩸 QUARTZ: ${amt}`);
+    }
+  }
+
+  updateForm(form) {
+    if (this.swapFormText) {
+      const isBerserker = form === 'berserker';
+      this.swapFormText.setText(isBerserker ? '⚔️ [TAB] BERSERKER' : '🛡️ [TAB] CRUSADER');
+      this.swapFormText.setColor(isBerserker ? '#ef4444' : '#38bdf8');
+    }
+  }
+
+  updateSwapCooldown(cd) {
+    if (this.swapFormText && cd > 0) {
+      this.swapFormText.setText(`⏳ SWAP (${cd.toFixed(1)}s)`);
+      this.swapFormText.setColor('#facc15');
+    }
   }
 
   updateEnemyCount(cnt) {

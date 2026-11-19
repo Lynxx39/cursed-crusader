@@ -8,6 +8,7 @@ import { RelicSystem } from '../systems/RelicSystem.js';
 import { SpriteFactory } from '../core/SpriteFactory.js';
 import { SoundSynth } from '../core/SoundSynth.js';
 import { EventBus } from '../core/EventBus.js';
+import { MetaProgression } from '../systems/MetaProgression.js';
 
 export class DungeonScene extends Phaser.Scene {
   constructor() {
@@ -32,6 +33,7 @@ export class DungeonScene extends Phaser.Scene {
     this.savedRelics = (data.relics && data.relics.length > 0) ? data.relics : localRelics;
     this.savedHp = (data.hp !== undefined && !isNaN(data.hp) && Number(data.hp) > 0) ? Number(data.hp) : 150;
     this.savedCorruption = data.corruption !== undefined ? Number(data.corruption) : localCorr;
+    this.savedPotions = data.potions;
     this.isTransitioning = false;
   }
 
@@ -48,9 +50,10 @@ export class DungeonScene extends Phaser.Scene {
     // 2. Initialize Juice
     this.juice = new JuiceEngine(this);
 
-    // 3. World Bounds (4600px Wide Multi-Section Skul Level, or 2400px for Boss Arena)
-    this.isBossChamber = this.currentRoom === 4 || this.currentRoom === 8;
-    const WORLD_W = this.isBossChamber ? 2400 : 4600;
+    // 3. Multi-Chapter Level Bounds (Boss Arenas: 2400px, Shop: 1400px, Standard: 4600px)
+    this.isBossChamber = this.currentRoom === 4 || this.currentRoom === 8 || this.currentRoom === 10;
+    this.isShopChamber = this.currentRoom === 5;
+    const WORLD_W = this.isShopChamber ? 1400 : (this.isBossChamber ? 2400 : 4600);
     const WORLD_H = this.isBossChamber ? 600 : 650;
     this.worldWidth = WORLD_W;
     this.worldHeight = WORLD_H;
@@ -188,10 +191,15 @@ export class DungeonScene extends Phaser.Scene {
     // 10. Camera Follow Player
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
 
-    // 11. Spawn Wave / Boss Encounter
+    // 11. Spawn Wave / Boss Encounter / Shop
     this.roomCleared = false;
 
-    if (this.isBossChamber) {
+    if (this.isShopChamber) {
+      this.roomCleared = true;
+      EventBus.emit('room:cleared');
+      EventBus.emit('enemies:count', 0);
+      this.spawnGateways();
+    } else if (this.isBossChamber) {
       this.spawnBossEncounter();
     } else {
       this.spawnExpansiveEnemyWave(WORLD_W);
@@ -211,8 +219,8 @@ export class DungeonScene extends Phaser.Scene {
       padding: { x: 9, y: 5 }
     }).setOrigin(0.5).setVisible(false).setDepth(35);
 
-    const exitSignX = this.isBossChamber ? 1200 : 4490;
-    const exitSignY = this.isBossChamber ? 140 : 250;
+    const exitSignX = this.isShopChamber ? 1180 : (this.isBossChamber ? 1200 : 4490);
+    const exitSignY = this.isShopChamber ? 200 : (this.isBossChamber ? 140 : 250);
     this.exitSign = this.add.text(exitSignX, exitSignY, '✦ GATES OF DESTINY: CHOOSE THY PATH ✦', {
       fontFamily: 'monospace', fontSize: '13px', fontStyle: 'bold', color: '#34d399',
       stroke: '#05070a', strokeThickness: 4, backgroundColor: 'rgba(5, 7, 10, 0.9)',
@@ -266,7 +274,9 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   buildExpansiveLevel(worldW, worldH) {
-    if (this.isBossChamber) {
+    if (this.isShopChamber) {
+      this.buildShopChamber(worldW, worldH);
+    } else if (this.isBossChamber) {
       this.buildBossArena(worldW, worldH);
     } else {
       this.buildExpansiveLevelGeometry(worldW, worldH);
@@ -299,9 +309,131 @@ export class DungeonScene extends Phaser.Scene {
     this.createTorch(1300, 230);
     this.createTorch(1900, 410);
 
+    // Decorative Dragon Bones for Chapter 2 Boss Arena (General Vane)
+    if (this.currentRoom === 8) {
+      if (this.textures.exists('dragon_bones_head')) {
+        this.add.image(1120, 510, 'dragon_bones_head').setScale(1.2).setDepth(2).setAlpha(0.85);
+      }
+      if (this.textures.exists('dragon_bones_ribs')) {
+        this.add.image(580, 510, 'dragon_bones_ribs').setScale(1.1).setDepth(2).setAlpha(0.8);
+        this.add.image(1660, 510, 'dragon_bones_ribs').setScale(1.1).setDepth(2).setAlpha(0.8).setFlipX(true);
+      }
+    }
+
     // Breakable Urns in arena corners
     this.createUrn(450, 414);
     this.createUrn(1850, 414);
+  }
+
+  buildShopChamber(worldW, worldH) {
+    // Solid floor across the shop sanctuary
+    for (let x = 0; x < worldW; x += 32) {
+      const tile = this.platforms.create(x + 16, 560, 'tile_floor');
+      tile.refreshBody();
+      const f1 = this.platforms.create(x + 16, 592, 'tile_foundation');
+      f1.refreshBody();
+    }
+
+    // Outer Boundaries
+    for (let y = 0; y < worldH; y += 32) {
+      this.platforms.create(0, y, 'tile_floor').refreshBody();
+      this.platforms.create(worldW, y, 'tile_floor').refreshBody();
+    }
+
+    // The Hooded Collector Market Stall
+    if (this.textures.exists('prop_market_stall')) {
+      this.add.image(520, 480, 'prop_market_stall').setScale(1.6).setDepth(3);
+    }
+    if (this.textures.exists('prop_soul_lantern')) {
+      this.add.image(380, 510, 'prop_soul_lantern').setDepth(3);
+      this.add.image(660, 510, 'prop_soul_lantern').setDepth(3);
+    }
+    if (this.textures.exists('prop_chest')) {
+      this.add.image(860, 535, 'prop_chest').setScale(1.1).setDepth(3);
+    }
+    if (this.textures.exists('prop_coffin')) {
+      this.add.image(200, 530, 'prop_coffin').setScale(1.1).setDepth(3);
+    }
+
+    // Atmospheric Lantern Glows
+    this.createTorch(380, 480);
+    this.createTorch(660, 480);
+
+    // Shopkeeper Title Banner
+    this.add.text(520, 395, '✦ THE HOODED COLLECTOR\'S BAZAAR ✦', {
+      fontFamily: 'Cinzel, monospace', fontSize: '13px', fontStyle: 'bold', color: '#facc15',
+      stroke: '#05070a', strokeThickness: 4, backgroundColor: 'rgba(5, 7, 10, 0.9)',
+      padding: { x: 12, y: 5 }
+    }).setOrigin(0.5).setDepth(20);
+
+    // Item 1: Restorative Health Potion
+    const item1 = this.add.sprite(360, 520, 'potion-red').setScale(1.8).setDepth(5).setInteractive({ useHandCursor: true });
+    if (this.anims.exists('potion-red-glow')) item1.anims.play('potion-red-glow');
+    this.add.text(360, 480, '[CLICK / E]\nHEALTH POTION\n50 GOLD', {
+      fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#4ade80',
+      align: 'center', stroke: '#000', strokeThickness: 3
+    }).setOrigin(0.5).setDepth(20);
+
+    item1.on('pointerdown', () => {
+      if (this.gold >= 50) {
+        this.gold -= 50;
+        EventBus.emit('gold:changed', this.gold);
+        this.player.potions = Math.min(this.player.maxPotions, this.player.potions + 1);
+        this.player.heal(50);
+        EventBus.emit('potion:changed', { current: this.player.potions, max: this.player.maxPotions });
+        try { SoundSynth.playBloodOrb(); } catch (e) {}
+        this.juice.emitHolySparks(360, 520, 16);
+        EventBus.emit('notification:show', { text: 'BOUGHT: HEALTH POTION (+1 POTION & +50 HP)', color: '#4ade80' });
+      } else {
+        EventBus.emit('notification:show', { text: 'NOT ENOUGH GOLD! (NEED 50)', color: '#ef4444' });
+      }
+    });
+
+    // Item 2: Purple Abyssal Elixir
+    const item2 = this.add.sprite(680, 520, 'potion-purple').setScale(1.8).setDepth(5).setInteractive({ useHandCursor: true });
+    if (this.anims.exists('potion-purple-glow')) item2.anims.play('potion-purple-glow');
+    this.add.text(680, 480, '[CLICK / E]\nABYSSAL ELIXIR\n40 GOLD', {
+      fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#c084fc',
+      align: 'center', stroke: '#000', strokeThickness: 3
+    }).setOrigin(0.5).setDepth(20);
+
+    item2.on('pointerdown', () => {
+      if (this.gold >= 40) {
+        this.gold -= 40;
+        EventBus.emit('gold:changed', this.gold);
+        this.player.addCorruption(35);
+        this.player.frenzyTimer = 20;
+        try { SoundSynth.playRoar(); } catch (e) {}
+        this.juice.emitVoidEmbers(680, 520, 20);
+        EventBus.emit('notification:show', { text: 'BOUGHT: ABYSSAL ELIXIR (+35% CORRUPT & 20s FRENZY)', color: '#c084fc' });
+      } else {
+        EventBus.emit('notification:show', { text: 'NOT ENOUGH GOLD! (NEED 40)', color: '#ef4444' });
+      }
+    });
+
+    // Item 3: Mystery Relic Casket
+    const item3 = this.add.sprite(860, 520, 'prop_chest').setScale(1.2).setDepth(5).setInteractive({ useHandCursor: true });
+    this.add.text(860, 480, '[CLICK / E]\nRELIC CASKET\n110 GOLD', {
+      fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#facc15',
+      align: 'center', stroke: '#000', strokeThickness: 3
+    }).setOrigin(0.5).setDepth(20);
+
+    let casketOpened = false;
+    item3.on('pointerdown', () => {
+      if (casketOpened) return;
+      if (this.gold >= 110) {
+        this.gold -= 110;
+        casketOpened = true;
+        EventBus.emit('gold:changed', this.gold);
+        item3.setTint(0x475569);
+        try { SoundSynth.playSlash(3); } catch (e) {}
+        this.juice.emitSparks(860, 520, 25);
+        const choices = this.relicSystem.getThreeRandomChoices();
+        EventBus.emit('relic:choose_options', choices);
+      } else {
+        EventBus.emit('notification:show', { text: 'NOT ENOUGH GOLD! (NEED 110)', color: '#ef4444' });
+      }
+    });
   }
 
   buildExpansiveLevelGeometry(worldW, worldH) {
@@ -604,60 +736,66 @@ export class DungeonScene extends Phaser.Scene {
     const spawnEnemy = (x, y, type) => {
       const enemy = new Enemy(this, x, y, type);
       this.physics.add.collider(enemy, this.platforms);
+      // Instant hazard kill overlap
+      this.physics.add.overlap(enemy, this.hazards, () => {
+        if (enemy && enemy.active && !enemy.isDead) {
+          this.juice.emitBlood(enemy.x, enemy.y, 24);
+          enemy.die();
+        }
+      });
       this.enemies.push(enemy);
       this.enemyGroup.add(enemy);
       return enemy;
     };
 
     // 1. Zone 1: Cathedral Antechamber (x: 200 - 800)
-    const z1Ghouls = Math.min(4, 2 + Math.floor(room * 0.5));
+    const z1Ghouls = Math.min(3, 2 + Math.floor(room * 0.4));
     for (let i = 0; i < z1Ghouls; i++) {
-      spawnEnemy(320 + i * 110, 510, 'ghoul');
+      spawnEnemy(320 + i * 120, 510, 'ghoul');
     }
-    // High sniper in Zone 1
+    // High sniper & flying predator in Zone 1
     spawnEnemy(480, 310, 'cultist');
+    spawnEnemy(620, 360, 'bat');
 
     // 2. Zone 2: Sunken Catacombs & Ramparts (x: 1100 - 1950)
-    const z2Ghouls = Math.min(4, 2 + Math.floor(room * 0.5));
+    const z2Ghouls = Math.min(3, 2 + Math.floor(room * 0.4));
     for (let i = 0; i < z2Ghouls; i++) {
       spawnEnemy(1200 + i * 140, 510, 'ghoul');
     }
-    // High Rampart Snipers
+    spawnEnemy(1450, 510, 'skeleton'); // Armored Skeleton
     spawnEnemy(1360, 300, 'cultist');
-    spawnEnemy(1620, 210, 'cultist');
+    spawnEnemy(1720, 340, 'bat');
     if (room >= 2) {
-      spawnEnemy(1550, 500, 'elite');
+      spawnEnemy(1580, 500, 'elite');
     }
 
     // 3. Zone 3: Forgotten Spire & Altar Guard (x: 2200 - 3000)
-    // Elite Minotaur guarding the Altar of Sacrifice
     spawnEnemy(2400, 500, 'elite');
-    const z3Ghouls = Math.min(4, 2 + Math.floor(room * 0.5));
-    for (let i = 0; i < z3Ghouls; i++) {
-      spawnEnemy(2650 + i * 100, 510, 'ghoul');
-    }
-    spawnEnemy(2520, 300, 'cultist');
+    spawnEnemy(2620, 510, 'skeleton');
+    spawnEnemy(2780, 510, 'skeleton');
+    spawnEnemy(2520, 300, 'sorcerer'); // Dark Sorcerer
     if (room >= 3) {
-      spawnEnemy(2780, 200, 'cultist');
+      spawnEnemy(2880, 360, 'bat');
     }
 
     // 4. Zone 4: Inquisitor's Armory (x: 3300 - 4100)
-    const z4Ghouls = Math.min(4, 2 + Math.floor(room * 0.6));
+    const z4Ghouls = Math.min(3, 2 + Math.floor(room * 0.5));
     for (let i = 0; i < z4Ghouls; i++) {
-      spawnEnemy(3400 + i * 120, 510, 'ghoul');
+      spawnEnemy(3400 + i * 130, 510, 'ghoul');
     }
-    spawnEnemy(3560, 300, 'cultist');
+    spawnEnemy(3560, 300, 'sorcerer');
+    spawnEnemy(3700, 510, 'skeleton');
     if (room >= 2) {
-      spawnEnemy(3750, 500, 'elite');
+      spawnEnemy(3850, 500, 'elite');
     }
     if (room >= 3) {
-      spawnEnemy(3950, 500, 'elite');
+      spawnEnemy(3980, 340, 'bat');
     }
 
     // 5. Zone 5: Grand Terrace Guardians (x: 4150 - 4500)
-    spawnEnemy(4180, 480, 'ghoul');
+    spawnEnemy(4180, 480, 'skeleton');
     if (room >= 2) {
-      spawnEnemy(4280, 430, 'ghoul');
+      spawnEnemy(4320, 430, 'cultist');
     }
 
     // 6. Time-based Escalation: Blood Horde Reinforcements if taking too long
@@ -708,29 +846,64 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   spawnBossEncounter() {
-    // Chapter Boss: High Inquisitor Malakor
-    this.boss = new Enemy(this, 1400, 480, 'cultist');
-    this.boss.isBoss = true;
-    const roomScale = 1.0 + Math.max(0, this.currentRoom - 1) * 0.16;
-    this.boss.maxHp = Math.round(680 * roomScale);
-    this.boss.hp = this.boss.maxHp;
-    this.boss.setScale(1.55);
-    this.boss.setTint(0xef4444);
-    this.boss.damage = Math.round(24 * (1.0 + (this.currentRoom - 1) * 0.14));
-    this.boss.attackRange = 320;
-    this.boss.body.setSize(38, 54).setOffset(20, 10);
+    this.enemies = [];
+    this.enemyGroup.clear(true, true);
 
-    this.physics.add.collider(this.boss, this.platforms);
-    this.enemies.push(this.boss);
-    this.enemyGroup.add(this.boss);
+    if (this.currentRoom === 4) {
+      // CHAPTER 1 BOSS: High Inquisitor Malakor
+      this.boss = new Enemy(this, 1400, 480, 'cultist');
+      this.boss.isBoss = true;
+      const roomScale = 1.0 + Math.max(0, this.currentRoom - 1) * 0.16;
+      this.boss.maxHp = Math.round(680 * roomScale);
+      this.boss.hp = this.boss.maxHp;
+      this.boss.setScale(1.55);
+      this.boss.setTint(0xef4444);
+      this.boss.damage = Math.round(24 * (1.0 + (this.currentRoom - 1) * 0.14));
+      this.boss.attackRange = 320;
+      this.boss.body.setSize(38, 54).setOffset(20, 10);
 
-    // High platform acolyte / summoner supporting the boss
-    const acolyte = new Enemy(this, 780, 310, 'cultist');
-    this.physics.add.collider(acolyte, this.platforms);
-    this.enemies.push(acolyte);
-    this.enemyGroup.add(acolyte);
+      this.physics.add.collider(this.boss, this.platforms);
+      this.enemies.push(this.boss);
+      this.enemyGroup.add(this.boss);
 
-    EventBus.emit('boss:spawned', { name: 'HIGH INQUISITOR MALAKOR', maxHp: this.boss.maxHp });
+      const acolyte = new Enemy(this, 780, 310, 'cultist');
+      this.physics.add.collider(acolyte, this.platforms);
+      this.enemies.push(acolyte);
+      this.enemyGroup.add(acolyte);
+
+      EventBus.emit('boss:spawned', { name: 'HIGH INQUISITOR MALAKOR', maxHp: this.boss.maxHp });
+    } else if (this.currentRoom === 8) {
+      // CHAPTER 2 BOSS: General Vane the Decapitator
+      this.boss = new Enemy(this, 1400, 480, 'general_vane');
+      this.physics.add.collider(this.boss, this.platforms);
+      this.enemies.push(this.boss);
+      this.enemyGroup.add(this.boss);
+
+      const minion1 = new Enemy(this, 700, 480, 'skeleton');
+      const minion2 = new Enemy(this, 1800, 480, 'skeleton');
+      this.physics.add.collider([minion1, minion2], this.platforms);
+      this.enemies.push(minion1, minion2);
+      this.enemyGroup.add(minion1);
+      this.enemyGroup.add(minion2);
+
+      EventBus.emit('boss:spawned', { name: 'GENERAL VANE THE DECAPITATOR', maxHp: this.boss.maxHp });
+    } else if (this.currentRoom === 10) {
+      // CHAPTER 3 FINAL BOSS: Void Arch-Seraph Belial
+      this.boss = new Enemy(this, 1200, 260, 'belial');
+      this.physics.add.collider(this.boss, this.platforms);
+      this.enemies.push(this.boss);
+      this.enemyGroup.add(this.boss);
+
+      const sorcerer1 = new Enemy(this, 500, 320, 'sorcerer');
+      const sorcerer2 = new Enemy(this, 1900, 320, 'sorcerer');
+      this.physics.add.collider([sorcerer1, sorcerer2], this.platforms);
+      this.enemies.push(sorcerer1, sorcerer2);
+      this.enemyGroup.add(sorcerer1);
+      this.enemyGroup.add(sorcerer2);
+
+      EventBus.emit('boss:spawned', { name: 'VOID ARCH-SERAPH BELIAL', maxHp: this.boss.maxHp });
+    }
+
     this.juice.addTrauma(0.85);
     SoundSynth.playRoar();
   }
@@ -1101,6 +1274,18 @@ export class DungeonScene extends Phaser.Scene {
     this.physics.add.collider(orb, this.platforms);
   }
 
+  spawnBloodQuartz(x, y, count = 1) {
+    const quartz = this.pickups.create(x, y - 10, 'blood_orb');
+    if (!quartz) return;
+    quartz.pickupType = 'quartz';
+    quartz.quartzAmount = count;
+    quartz.setTint(0xf43f5e);
+    quartz.setScale(1.4);
+    quartz.setBounce(0.4);
+    quartz.setCollideWorldBounds(true);
+    this.physics.add.collider(quartz, this.platforms);
+  }
+
   spawnGoldCoin(x, y) {
     const coin = this.pickups.create(x, y - 10, 'gold_coin');
     if (!coin) return;
@@ -1126,6 +1311,17 @@ export class DungeonScene extends Phaser.Scene {
       this.gold += 15;
       EventBus.emit('gold:changed', this.gold);
       this.juice.emitSparks(pickup.x, pickup.y, 4);
+    } else if (pickup.pickupType === 'quartz') {
+      try { SoundSynth.playHit(); } catch (e) {}
+      const amt = pickup.quartzAmount || 1;
+      const meta = MetaProgression.getInstance();
+      const total = meta.addBloodQuartz(amt);
+      EventBus.emit('quartz:changed', total);
+      this.juice.emitHolySparks(pickup.x, pickup.y, 8);
+      EventBus.emit('notification:show', {
+        text: `+${amt} BLOOD QUARTZ COLLECTED! (TOTAL: ${total})`,
+        color: '#f43f5e'
+      });
     }
 
     pickup.destroy();
@@ -1226,13 +1422,22 @@ export class DungeonScene extends Phaser.Scene {
     };
 
     // Skul-Style Gate Pairings based on Chamber Progression:
-    if (this.currentRoom === 3 || this.currentRoom === 7) {
+    if (this.currentRoom === 3 || this.currentRoom === 7 || this.currentRoom === 9) {
       // Room preceding the Boss chamber: Show Dread Sanctum Boss Gate!
       const gateX = this.isBossChamber ? 1200 : 4490;
       createGateWithLabel(gateX, 'gate_boss', 'anim-gate-boss', 'boss', '⚔ DREAD SANCTUM (BOSS)', '#f87171');
-    } else if (this.isBossChamber) {
-      // After beating the boss: Golden Trophy Archway!
-      createGateWithLabel(1200, 'gate_gold', 'anim-gate-gold', 'gold', '❖ TRIUMPH VAULT', '#fde047');
+    } else if (this.currentRoom === 4) {
+      // After beating Chapter 1 boss: Gate to Chapter 2 Merchant Bazaar!
+      createGateWithLabel(1200, 'gate_gold', 'anim-gate-gold', 'gold', '❖ THE COLLECTOR\'S BAZAAR', '#fde047');
+    } else if (this.currentRoom === 5) {
+      // Exit from Shop to Chamber 6
+      createGateWithLabel(1180, 'gate_boss', 'anim-gate-boss', 'boss', '❖ DEEPER CATACOMBS (CHAMBER 6)', '#c084fc');
+    } else if (this.currentRoom === 8) {
+      // After beating Chapter 2 boss: Gate to High Spire!
+      createGateWithLabel(1200, 'gate_relic', 'anim-gate-relic', 'relic', '◆ FORGOTTEN SPIRE', '#c084fc');
+    } else if (this.currentRoom === 10) {
+      // After beating Final Boss Belial: Glorious Victory Vault!
+      createGateWithLabel(1200, 'gate_gold', 'anim-gate-gold', 'victory', '👑 ETERNAL PURIFICATION (VICTORY)', '#34d399');
     } else if (this.currentRoom % 2 === 1) {
       createGateWithLabel(4420, 'gate_gold', 'anim-gate-gold', 'gold', '❖ GOLD VAULT', '#fde047');
       createGateWithLabel(4560, 'gate_relic', 'anim-gate-relic', 'relic', '◆ RELIC ALTAR', '#e879f9');
@@ -1283,6 +1488,21 @@ export class DungeonScene extends Phaser.Scene {
       SoundSynth.playRoar();
       this.juice.addTrauma(0.7);
       this.proceedToNextRoom();
+    } else if (gate.gateType === 'victory') {
+      this.isTransitioning = true;
+      const meta = MetaProgression.getInstance();
+      meta.addBloodQuartz(100);
+      SoundSynth.playRoar();
+      this.juice.addTrauma(1.0);
+      this.cameras.main.flash(600, 255, 255, 255);
+      EventBus.emit('notification:show', {
+        text: '👑 EXPEDITION CONQUERED! +100 BONUS BLOOD QUARTZ 👑',
+        color: '#facc15'
+      });
+      this.time.delayedCall(2500, () => {
+        this.scene.stop('hud');
+        this.scene.start('sanctuary');
+      });
     }
   }
 
@@ -1305,7 +1525,8 @@ export class DungeonScene extends Phaser.Scene {
         gold: this.gold,
         hp: this.player.hp,
         corruption: this.player.corruption,
-        relics: this.relicSystem.equippedRelics
+        relics: this.relicSystem.equippedRelics,
+        potions: this.player ? this.player.potions : undefined
       });
     });
   }

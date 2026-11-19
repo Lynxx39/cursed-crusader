@@ -1,7 +1,8 @@
-// Player.js - Holy Knight with Mouse Combat (LMB: Attack, RMB: Dash), Parry, and Beast Transformations
+// Player.js - Holy Knight with Mouse Combat (LMB: Attack, RMB: Dash), Parry, Form Swap & Potions
 import Phaser from 'phaser';
 import { SoundSynth } from '../core/SoundSynth.js';
 import { EventBus } from '../core/EventBus.js';
+import { MetaProgression } from '../systems/MetaProgression.js';
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y, initialHp = 150, initialCorruption = 0) {
@@ -9,19 +10,33 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
+    // Meta-Progression Permanent Upgrades
+    const meta = MetaProgression.getInstance();
+    const metaBonuses = meta.getCombinedStatBonuses();
+
     // HP & Vitality (Safely guarded against undefined/NaN)
-    this.maxHp = 150;
-    this.hp = (initialHp !== undefined && !isNaN(initialHp) && Number(initialHp) > 0) ? Number(initialHp) : 150;
+    this.maxHp = 150 + (metaBonuses.maxHp || 0);
+    this.hp = (initialHp !== undefined && !isNaN(initialHp) && Number(initialHp) > 0)
+      ? Math.min(this.maxHp, Number(initialHp) + (metaBonuses.maxHp || 0))
+      : this.maxHp;
 
     // Hitbox sizing matching Gothicvania player dimensions (82x60)
     this.body.setSize(26, 50).setOffset(28, 10);
     this.setCollideWorldBounds(true);
 
     // Movement & Facing
-    this.speed = 190;
+    this.speed = 190 + (metaBonuses.moveSpeed || 0);
     this.facing = 1; // 1: facing right, -1: facing left
     this.jumpVelocity = -415; // Tuned for single-jump clearance of 90px platforms
     this.isDead = false;
+
+    // Consumable Potions ([F] Key)
+    this.maxPotions = metaBonuses.maxPotions || 2;
+    this.potions = (scene && scene.savedPotions !== undefined) ? scene.savedPotions : this.maxPotions;
+
+    // Form / Skull Swap (Skul: The Hero Slayer mechanic)
+    this.activeForm = 'crusader'; // 'crusader' | 'berserker'
+    this.swapCooldown = 0;
 
     // Grounded Drop-Shadow for 16-bit depth
     if (scene.textures.exists('shadow_ellipse')) {
@@ -38,6 +53,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.isDashing = false;
     this.dashTimer = 0;
     this.dashCooldown = 0;
+    this.baseDashCooldown = Math.max(0.35, 0.65 - (metaBonuses.dashCooldownReduction || 0));
     this.isParrying = false;
     this.parryTimer = 0;
     this.parryCooldown = 0;
@@ -59,12 +75,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     // Stat Modifiers from Relics & Gate Blessings
     this.statMods = {
-      damageMult: 1.0,
+      damageMult: 1.0 + (metaBonuses.damageMult || 0),
       maxHpBonus: 0,
       lifesteal: 0.15,
       parryWindowBonus: 0,
       attackSpeedMult: 1.0,
-      corruptionGainMult: 1.0,
+      corruptionGainMult: 1.0 + (metaBonuses.corruptionGainMult || 0),
       critChance: 0.10,
       critDamageBonus: 0.0,
       parryReflect: 1.0,
@@ -89,6 +105,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       attack: Phaser.Input.Keyboard.KeyCodes.J,
       parry: Phaser.Input.Keyboard.KeyCodes.K,
       dash: Phaser.Input.Keyboard.KeyCodes.L,
+      potion: Phaser.Input.Keyboard.KeyCodes.F,
+      swapTab: Phaser.Input.Keyboard.KeyCodes.TAB,
+      swapKey: Phaser.Input.Keyboard.KeyCodes.C,
       awaken: Phaser.Input.Keyboard.KeyCodes.U,
       finisher: Phaser.Input.Keyboard.KeyCodes.I,
       shift: Phaser.Input.Keyboard.KeyCodes.SHIFT,
@@ -98,9 +117,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       altUp: Phaser.Input.Keyboard.KeyCodes.UP,
       altAttack: Phaser.Input.Keyboard.KeyCodes.Z,
       altParry: Phaser.Input.Keyboard.KeyCodes.X,
-      altDash: Phaser.Input.Keyboard.KeyCodes.C,
-      altAwaken: Phaser.Input.Keyboard.KeyCodes.V,
-      altFinisher: Phaser.Input.Keyboard.KeyCodes.F
+      altDash: Phaser.Input.Keyboard.KeyCodes.SHIFT,
+      altAwaken: Phaser.Input.Keyboard.KeyCodes.V
     });
 
     // MOUSE INPUTS: Left Click = Attack, Right Click = Dash
@@ -167,6 +185,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.parryCooldown > 0) this.parryCooldown -= dt;
     if (this.attackCooldown > 0) this.attackCooldown -= dt;
     if (this.attackAnimTimer > 0) this.attackAnimTimer -= dt;
+    if (this.swapCooldown > 0) {
+      this.swapCooldown -= dt;
+      EventBus.emit('swap:cooldown', { current: Math.max(0, this.swapCooldown), max: 6.0 });
+    }
     if (this.comboTimer > 0) {
       this.comboTimer -= dt;
       if (this.comboTimer <= 0) this.comboStep = 0;
@@ -310,9 +332,88 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (Phaser.Input.Keyboard.JustDown(this.keys.awaken) || Phaser.Input.Keyboard.JustDown(this.keys.altAwaken)) {
       this.tryTransform();
     }
-    if (Phaser.Input.Keyboard.JustDown(this.keys.finisher) || Phaser.Input.Keyboard.JustDown(this.keys.altFinisher)) {
+    if (Phaser.Input.Keyboard.JustDown(this.keys.finisher)) {
       this.tryFinisher();
     }
+    if (Phaser.Input.Keyboard.JustDown(this.keys.potion)) {
+      this.tryDrinkPotion();
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.keys.swapTab) || Phaser.Input.Keyboard.JustDown(this.keys.swapKey)) {
+      this.trySwapForm();
+    }
+  }
+
+  tryDrinkPotion() {
+    if (this.isDead || !this.active) return;
+    if (this.potions <= 0) {
+      EventBus.emit('notification:show', { text: 'NO POTIONS REMAINING!', color: '#ef4444' });
+      try { SoundSynth.playHit(); } catch (e) {}
+      return;
+    }
+    if (this.hp >= this.maxHp) {
+      EventBus.emit('notification:show', { text: 'HEALTH ALREADY FULL!', color: '#38bdf8' });
+      return;
+    }
+
+    this.potions--;
+    const healAmount = Math.round(this.maxHp * 0.45);
+    this.hp = Math.min(this.maxHp, this.hp + healAmount);
+    EventBus.emit('player:hp_changed', { current: this.hp, max: this.maxHp });
+    EventBus.emit('potion:changed', { current: this.potions, max: this.maxPotions });
+
+    this.scene.juice.popDamageNumber(this.x, this.y - 20, healAmount, 'crit');
+    this.scene.juice.emitHolySparks(this.x, this.y, 22);
+    try { SoundSynth.playHeal(); } catch (e) {}
+
+    EventBus.emit('notification:show', {
+      text: `HEALED +${healAmount} HP! (${this.potions} POTIONS REMAINING)`,
+      color: '#22c55e'
+    });
+  }
+
+  trySwapForm() {
+    if (this.isDead || !this.active) return;
+    if (this.swapCooldown > 0) {
+      EventBus.emit('notification:show', {
+        text: `FORM SWAP RECHARGING (${this.swapCooldown.toFixed(1)}s)`,
+        color: '#facc15'
+      });
+      return;
+    }
+
+    this.swapCooldown = 6.0;
+    this.activeForm = (this.activeForm === 'crusader') ? 'berserker' : 'crusader';
+    this.isBeast = (this.activeForm === 'berserker');
+    this.beastType = this.isBeast ? 'abyssal' : null;
+
+    // Swap Shockwave (Skul Style): Deals burst damage and repels all nearby foes
+    this.scene.juice.addTrauma(0.65);
+    this.scene.cameras.main.flash(200, this.isBeast ? 180 : 50, this.isBeast ? 20 : 180, this.isBeast ? 50 : 255);
+    this.scene.juice.emitHolySparks(this.x, this.y, 20);
+    this.scene.juice.emitVoidEmbers(this.x, this.y, 24);
+    try { SoundSynth.playRoar(); } catch (e) {}
+
+    if (this.scene.enemies) {
+      this.scene.enemies.forEach(enemy => {
+        if (enemy && enemy.active && !enemy.isDead) {
+          const d = Phaser.Math.Distance.Between(this.x, this.y, enemy.x, enemy.y);
+          if (d < 160) {
+            const knockDir = enemy.x > this.x ? 1 : -1;
+            enemy.takeDamage(60, this.x, true, true);
+            if (enemy && enemy.active && enemy.body && !enemy.isDead) {
+              enemy.setVelocity(knockDir * 320, -160);
+            }
+          }
+        }
+      });
+    }
+
+    const formTitle = this.isBeast ? '⚔️ DREAD BERSERKER (VOID FRENZY)' : '🛡️ HOLY CRUSADER (BLESSED AEGIS)';
+    EventBus.emit('notification:show', {
+      text: `SWAP: ${formTitle}`,
+      color: this.isBeast ? '#ef4444' : '#38bdf8'
+    });
+    EventBus.emit('form:swapped', { form: this.activeForm, cooldown: 6.0 });
   }
 
   updateAnimation(onFloor) {

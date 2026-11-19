@@ -40,6 +40,31 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 81, frameHeight: 66
     });
 
+    // 2b. Additional Gothicvania Enemies, Bosses & Consumables
+    this.load.spritesheet('bat-fly', 'assets/spritesheets/bat-fly.png', {
+      frameWidth: 32, frameHeight: 51
+    });
+    this.load.spritesheet('skeleton', 'assets/spritesheets/skeleton.png', {
+      frameWidth: 48, frameHeight: 64
+    });
+    this.load.spritesheet('sorcerer', 'assets/spritesheets/sorcerer.png', {
+      frameWidth: 40, frameHeight: 48
+    });
+    this.load.spritesheet('potion-red', 'assets/spritesheets/potion-red.png', {
+      frameWidth: 16, frameHeight: 16
+    });
+    this.load.spritesheet('potion-purple', 'assets/spritesheets/potion-purple.png', {
+      frameWidth: 16, frameHeight: 16
+    });
+
+    // 2c. Props & Environment Assets
+    this.load.image('prop_chest', 'assets/props/chest.png');
+    this.load.image('prop_market_stall', 'assets/props/market_stall.png');
+    this.load.image('prop_coffin', 'assets/props/coffin.png');
+    this.load.image('prop_soul_lantern', 'assets/props/soul_lantern.png');
+    this.load.image('dragon_bones_head', 'assets/props/dragon-bones-head.png');
+    this.load.image('dragon_bones_ribs', 'assets/props/dragon-bones-ribs.png');
+
     // 3. Frame JSON Maps
     this.load.json('player-frames', 'assets/spritesheets/player.json');
     this.load.json('wizard-frames', 'assets/spritesheets/wizard.json');
@@ -153,7 +178,16 @@ export class BootScene extends Phaser.Scene {
       { key: 'anim-gate-beast', frames: this.anims.generateFrameNumbers('gate_beast', { start: 0, end: 3 }), frameRate: 6, repeat: -1 },
       { key: 'anim-gate-relic', frames: this.anims.generateFrameNumbers('gate_relic', { start: 0, end: 3 }), frameRate: 6, repeat: -1 },
       { key: 'anim-gate-gold', frames: this.anims.generateFrameNumbers('gate_gold', { start: 0, end: 3 }), frameRate: 6, repeat: -1 },
-      { key: 'anim-gate-boss', frames: this.anims.generateFrameNumbers('gate_boss', { start: 0, end: 3 }), frameRate: 6, repeat: -1 }
+      { key: 'anim-gate-boss', frames: this.anims.generateFrameNumbers('gate_boss', { start: 0, end: 3 }), frameRate: 6, repeat: -1 },
+
+      // Additional Gothic Monsters & Consumables
+      { key: 'bat-fly-anim', frames: this.anims.generateFrameNumbers('bat-fly', { start: 0, end: 3 }), frameRate: 10, repeat: -1 },
+      { key: 'skeleton-walk', frames: this.anims.generateFrameNumbers('skeleton', { start: 0, end: 5 }), frameRate: 8, repeat: -1 },
+      { key: 'skeleton-attack', frames: this.anims.generateFrameNumbers('skeleton', { start: 2, end: 5 }), frameRate: 12, repeat: 0 },
+      { key: 'sorcerer-idle', frames: this.anims.generateFrameNumbers('sorcerer', { start: 0, end: 3 }), frameRate: 6, repeat: -1 },
+      { key: 'sorcerer-cast', frames: this.anims.generateFrameNumbers('sorcerer', { start: 0, end: 3 }), frameRate: 10, repeat: 0 },
+      { key: 'potion-red-glow', frames: this.anims.generateFrameNumbers('potion-red', { start: 0, end: 3 }), frameRate: 8, repeat: -1 },
+      { key: 'potion-purple-glow', frames: this.anims.generateFrameNumbers('potion-purple', { start: 0, end: 3 }), frameRate: 8, repeat: -1 }
     ];
 
     animDefs.forEach(def => {
