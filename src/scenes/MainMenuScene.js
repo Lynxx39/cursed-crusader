@@ -130,15 +130,6 @@ export class MainMenuScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-SPACE', () => this.startExpedition());
     this.input.keyboard.on('keydown-ENTER', () => this.startExpedition());
 
-    // 6. Footer & Controls Briefing
-    this.add.text(width / 2, height - 25, '[CLICK TO SELECT]  •  [W / SPACE]: JUMP  •  [SHIFT]: DASH  •  [RMB]: PARRY  •  [LMB]: ATTACK', {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#64748b',
-      stroke: '#000000',
-      strokeThickness: 3
-    }).setOrigin(0.5);
-
     // 7. Ambient BGM (Ockaie Temple)
     try {
       if (this.cache.audio.exists('bgm-temple') && (!this.sound.get('bgm-temple') || !this.sound.get('bgm-temple').isPlaying)) {

@@ -47,7 +47,7 @@ export const SANCTUARY_UPGRADES = [
     icon: '🧪',
     maxLevel: 3,
     costs: [30, 80, 200],
-    effect: (level) => ({ maxPotions: 1 + level })
+    effect: (level) => ({ maxPotions: 2 + level })
   },
   {
     id: 'corrupted_blood',
@@ -114,10 +114,11 @@ export class MetaProgression {
   }
 
   addBloodQuartz(amount) {
-    if (amount <= 0) return;
+    if (amount <= 0) return this.data.bloodQuartz;
     this.data.bloodQuartz += Math.round(amount);
     this.save();
     EventBus.emit('meta:quartz_changed', this.data.bloodQuartz);
+    return this.data.bloodQuartz;
   }
 
   getUpgradeLevel(id) {
@@ -156,7 +157,7 @@ export class MetaProgression {
       dashCooldownMult: 1.0,
       speedBonus: 0,
       startingGold: 0,
-      maxPotions: 1,
+      maxPotions: 2,
       corruptionMult: 1.0
     };
 
@@ -189,4 +190,4 @@ export class MetaProgression {
   }
 }
 
-export const metaProgression = new MetaProgression();
+export const metaProgression = MetaProgression.getInstance();

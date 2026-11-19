@@ -101,9 +101,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.setTint(0x991b1b);
       if (scene.anims.exists('ghoul-run')) this.anims.play('ghoul-run', true);
     } else if (type === 'general_vane') {
-      // CHAPTER 2 BOSS: General Vane the Decapitator
+      // CHAPTER 2 BOSS: General Vane the Decapitator (Tuned base HP 1150)
       this.isBoss = true;
-      this.maxHp = Math.round(1500 * roomScale);
+      this.maxHp = Math.round(1150 * roomScale);
       this.hp = this.maxHp;
       this.speed = Math.round(82 * speedScale);
       this.damage = Math.round(30 * dmgScale);
@@ -115,11 +115,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.slamCooldown = 4.0;
       this.cleaveCooldown = 2.2;
     } else if (type === 'belial') {
-      // CHAPTER 3 FINAL BOSS: Void Arch-Seraph Belial
+      // CHAPTER 3 FINAL BOSS: Void Arch-Seraph Belial (Tuned base HP 1650)
       this.isBoss = true;
       this.isFlying = true;
       this.body.setAllowGravity(false);
-      this.maxHp = Math.round(2400 * roomScale);
+      this.maxHp = Math.round(1650 * roomScale);
       this.hp = this.maxHp;
       this.speed = Math.round(95 * speedScale);
       this.damage = Math.round(36 * dmgScale);
@@ -218,7 +218,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const onFloor = this.body.blocked.down || this.body.touching.down;
 
     // Face player
-    if (this.enemyType === 'cultist' || this.enemyType === 'bat' || this.enemyType === 'sorcerer') {
+    if (this.enemyType === 'cultist' || this.enemyType === 'bat' || this.enemyType === 'sorcerer' || this.enemyType === 'belial') {
       this.setFlipX(dir < 0);
     } else {
       this.setFlipX(dir > 0);
@@ -648,7 +648,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (!this.active || !this.body || this.isDead) return;
     this.state = 'ATTACK';
     const dir = player.x > this.x ? 1 : -1;
-    if (this.enemyType === 'cultist' || this.enemyType === 'bat' || this.enemyType === 'sorcerer') {
+    if (this.enemyType === 'cultist' || this.enemyType === 'bat' || this.enemyType === 'sorcerer' || this.enemyType === 'belial') {
       this.setFlipX(dir < 0);
     } else {
       this.setFlipX(dir > 0);

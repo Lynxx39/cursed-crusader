@@ -190,7 +190,7 @@ export class HudScene extends Phaser.Scene {
   }
 
   createRelicsDisplay() {
-    this.relicSlotContainer = this.add.container(20, 502).setDepth(20);
+    this.relicSlotContainer = this.add.container(20, 468).setDepth(20);
     // Dark gothic belt plate
     const beltPlate = this.add.rectangle(140, 10, 280, 24, 0x070a12, 0.85)
       .setStrokeStyle(1, 0x334155);
@@ -225,12 +225,12 @@ export class HudScene extends Phaser.Scene {
 
   // Boss HP Bar at Top Center (Dark Souls / Metroidvania Style)
   createBossBar() {
-    this.bossBarContainer = this.add.container(480, 42).setVisible(false).setDepth(25);
+    this.bossBarContainer = this.add.container(480, 80).setVisible(false).setDepth(25);
 
-    const bg = this.add.rectangle(0, 0, 520, 22, 0x05070a).setStrokeStyle(2, 0xdc2626);
-    this.bossHpFill = this.add.rectangle(-258, -9, 516, 18, 0xb91c1c).setOrigin(0, 0);
-    this.bossNameText = this.add.text(0, -20, '⚔ HIGH INQUISITOR MALAKOR ⚔', {
-      fontFamily: 'Cinzel, monospace', fontSize: '14px', fontStyle: 'bold', color: '#f87171',
+    const bg = this.add.rectangle(0, 0, 440, 20, 0x05070a).setStrokeStyle(2, 0xdc2626);
+    this.bossHpFill = this.add.rectangle(-218, -8, 436, 16, 0xb91c1c).setOrigin(0, 0);
+    this.bossNameText = this.add.text(0, -18, '⚔ HIGH INQUISITOR MALAKOR ⚔', {
+      fontFamily: 'Cinzel, monospace', fontSize: '13px', fontStyle: 'bold', color: '#f87171',
       stroke: '#05070a', strokeThickness: 4
     }).setOrigin(0.5);
 
@@ -239,7 +239,7 @@ export class HudScene extends Phaser.Scene {
 
   showBossBar({ name, maxHp }) {
     this.bossNameText.setText(`⚔ ${name.toUpperCase()} ⚔`);
-    this.bossHpFill.width = 516;
+    this.bossHpFill.width = 436;
     this.bossBarContainer.setVisible(true);
   }
 
@@ -247,7 +247,7 @@ export class HudScene extends Phaser.Scene {
     const ratio = Math.max(0, current / max);
     this.tweens.add({
       targets: this.bossHpFill,
-      width: ratio * 516,
+      width: ratio * 436,
       duration: 150
     });
   }

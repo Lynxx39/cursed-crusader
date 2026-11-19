@@ -250,6 +250,12 @@ export class DungeonScene extends Phaser.Scene {
     };
     EventBus.on('enemy:killed', this.onEnemyKilledHandler);
 
+    this.onPlayerDiedHandler = () => {
+      const meta = MetaProgression.getInstance();
+      meta.recordRunEnd({ chamber: this.currentRoom, bossKilled: false });
+    };
+    EventBus.on('player:died', this.onPlayerDiedHandler);
+
     this.events.on('shutdown', () => {
       if (this.reinforcementTimer) {
         this.reinforcementTimer.remove();
@@ -263,6 +269,7 @@ export class DungeonScene extends Phaser.Scene {
       }
       EventBus.off('enemy:killed', this.onEnemyKilledHandler);
       EventBus.off('relic:selected', this.onRelicSelectedHandler);
+      EventBus.off('player:died', this.onPlayerDiedHandler);
     });
 
     // Notify HUD
@@ -374,7 +381,11 @@ export class DungeonScene extends Phaser.Scene {
       align: 'center', stroke: '#000', strokeThickness: 3
     }).setOrigin(0.5).setDepth(20);
 
-    item1.on('pointerdown', () => {
+    const buyHealthPotion = () => {
+      if (this.player.potions >= this.player.maxPotions && this.player.hp >= this.player.maxHp) {
+        EventBus.emit('notification:show', { text: 'HEALTH & POTIONS ALREADY FULL!', color: '#38bdf8' });
+        return;
+      }
       if (this.gold >= 50) {
         this.gold -= 50;
         EventBus.emit('gold:changed', this.gold);
@@ -387,6 +398,10 @@ export class DungeonScene extends Phaser.Scene {
       } else {
         EventBus.emit('notification:show', { text: 'NOT ENOUGH GOLD! (NEED 50)', color: '#ef4444' });
       }
+    };
+
+    item1.on('pointerdown', () => {
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, 360, 520) < 220) buyHealthPotion();
     });
 
     // Item 2: Purple Abyssal Elixir
@@ -397,7 +412,7 @@ export class DungeonScene extends Phaser.Scene {
       align: 'center', stroke: '#000', strokeThickness: 3
     }).setOrigin(0.5).setDepth(20);
 
-    item2.on('pointerdown', () => {
+    const buyAbyssalElixir = () => {
       if (this.gold >= 40) {
         this.gold -= 40;
         EventBus.emit('gold:changed', this.gold);
@@ -409,6 +424,10 @@ export class DungeonScene extends Phaser.Scene {
       } else {
         EventBus.emit('notification:show', { text: 'NOT ENOUGH GOLD! (NEED 40)', color: '#ef4444' });
       }
+    };
+
+    item2.on('pointerdown', () => {
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, 680, 520) < 220) buyAbyssalElixir();
     });
 
     // Item 3: Mystery Relic Casket
@@ -419,7 +438,7 @@ export class DungeonScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(20);
 
     let casketOpened = false;
-    item3.on('pointerdown', () => {
+    const buyRelicCasket = () => {
       if (casketOpened) return;
       if (this.gold >= 110) {
         this.gold -= 110;
@@ -433,7 +452,17 @@ export class DungeonScene extends Phaser.Scene {
       } else {
         EventBus.emit('notification:show', { text: 'NOT ENOUGH GOLD! (NEED 110)', color: '#ef4444' });
       }
+    };
+
+    item3.on('pointerdown', () => {
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, 860, 520) < 220) buyRelicCasket();
     });
+
+    this.shopItems = [
+      { x: 360, buy: buyHealthPotion },
+      { x: 680, buy: buyAbyssalElixir },
+      { x: 860, buy: buyRelicCasket }
+    ];
   }
 
   buildExpansiveLevelGeometry(worldW, worldH) {
@@ -954,6 +983,18 @@ export class DungeonScene extends Phaser.Scene {
       this.shrinePrompt.setVisible(false);
     }
 
+    // Check Shop Items interaction in Chamber 5
+    if (this.isShopChamber && this.shopItems && this.player && !this.player.isDead) {
+      if (Phaser.Input.Keyboard.JustDown(this.eKey)) {
+        for (const item of this.shopItems) {
+          if (Phaser.Math.Distance.Between(this.player.x, this.player.y, item.x, 520) < 100) {
+            item.buy();
+            break;
+          }
+        }
+      }
+    }
+
     // Check Gate interactions at the far right
     if (this.roomCleared && !this.isTransitioning) {
       let touchingGate = null;
@@ -994,6 +1035,7 @@ export class DungeonScene extends Phaser.Scene {
         const critMult = 1.5 + ((this.player && this.player.statMods && this.player.statMods.critDamageBonus) || 0);
         const totalDmg = isCrit ? Math.round(damage * critMult) : damage;
         enemy.takeDamage(totalDmg, x, isCrit, isBeast);
+        this.juice.hitStop(step === 2 ? 40 : 20);
 
         // Relic effect: Frenzied Wolf Fang (Bleed application)
         if (enemy.active && !enemy.isDead && this.player && this.player.statMods && Math.random() < (this.player.statMods.bleedChance || 0)) {
@@ -1492,6 +1534,7 @@ export class DungeonScene extends Phaser.Scene {
       this.isTransitioning = true;
       const meta = MetaProgression.getInstance();
       meta.addBloodQuartz(100);
+      meta.recordRunEnd({ chamber: 10, bossKilled: true });
       SoundSynth.playRoar();
       this.juice.addTrauma(1.0);
       this.cameras.main.flash(600, 255, 255, 255);

@@ -38,12 +38,12 @@ export class SanctuaryScene extends Phaser.Scene {
 
     // 3. Blood Quartz Counter (Top Right)
     this.quartzContainer = this.add.container(width - 160, 42);
-    const qPlate = this.add.rectangle(0, 0, 160, 32, 0x0f172a).setStrokeStyle(2, 0xdc2626);
+    const qPlate = this.add.rectangle(0, 0, 160, 32, 0x0f172a).setStrokeStyle(2, 0x7c3aed);
     this.quartzText = this.add.text(0, 0, `🩸 QUARTZ: ${metaProgression.getBloodQuartz()}`, {
       fontFamily: 'monospace',
       fontSize: '13px',
       fontStyle: 'bold',
-      color: '#f87171'
+      color: '#c084fc'
     }).setOrigin(0.5);
     this.quartzContainer.add([qPlate, this.quartzText]);
 
@@ -112,18 +112,24 @@ export class SanctuaryScene extends Phaser.Scene {
         color: '#94a3b8'
       });
 
-      // Level Pips
+      // Level Pips (Luminous framed slots)
+      const pips = [];
       for (let p = 0; p < upgrade.maxLevel; p++) {
-        const pipX = -cardW / 2 + 18 + p * 16;
-        const pipY = 22;
-        this.add.rectangle(pipX, pipY, 11, 4, p < level ? (isMax ? 0x10b981 : 0xa855f7) : 0x1e293b)
+        const pipX = -cardW / 2 + 18 + p * 18;
+        const pipY = 16;
+        const isFilled = p < level;
+        const fillCol = isFilled ? (isMax ? 0x10b981 : 0xa855f7) : 0x0f172a;
+        const strokeCol = isFilled ? (isMax ? 0x34d399 : 0xc084fc) : 0x334155;
+        const pip = this.add.rectangle(pipX, pipY, 13, 6, fillCol)
+          .setStrokeStyle(1, strokeCol)
           .setOrigin(0, 0);
+        pips.push(pip);
       }
 
       // Upgrade Action Button on Right
-      let btnText = isMax ? 'MAX RANK' : `🩸 ${cost} UPGRADE`;
+      let btnText = isMax ? 'MAX RANK' : (canAfford ? `🩸 ${cost} UPGRADE` : `🔒 🩸 ${cost} QUARTZ`);
       let btnColor = isMax ? '#10b981' : (canAfford ? '#fde047' : '#64748b');
-      let btnBg = isMax ? 'rgba(6, 78, 59, 0.4)' : (canAfford ? 'rgba(88, 28, 135, 0.7)' : 'rgba(15, 23, 42, 0.6)');
+      let btnBg = isMax ? 'rgba(6, 78, 59, 0.4)' : (canAfford ? 'rgba(88, 28, 135, 0.7)' : 'rgba(15, 23, 42, 0.85)');
 
       const upBtn = this.add.text(cardW / 2 - 18, 0, btnText, {
         fontFamily: 'monospace',
@@ -147,7 +153,7 @@ export class SanctuaryScene extends Phaser.Scene {
         });
       }
 
-      card.add([bg, nameText, descText, upBtn]);
+      card.add([bg, nameText, descText, upBtn, ...pips]);
       this.cards.push(card);
     });
   }

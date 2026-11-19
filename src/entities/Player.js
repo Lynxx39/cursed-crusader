@@ -17,7 +17,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // HP & Vitality (Safely guarded against undefined/NaN)
     this.maxHp = 150 + (metaBonuses.maxHp || 0);
     this.hp = (initialHp !== undefined && !isNaN(initialHp) && Number(initialHp) > 0)
-      ? Math.min(this.maxHp, Number(initialHp) + (metaBonuses.maxHp || 0))
+      ? Math.min(this.maxHp, Number(initialHp))
       : this.maxHp;
 
     // Hitbox sizing matching Gothicvania player dimensions (82x60)
@@ -25,7 +25,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setCollideWorldBounds(true);
 
     // Movement & Facing
-    this.speed = 190 + (metaBonuses.moveSpeed || 0);
+    this.speed = 190 + (metaBonuses.speedBonus || 0);
     this.facing = 1; // 1: facing right, -1: facing left
     this.jumpVelocity = -415; // Tuned for single-jump clearance of 90px platforms
     this.isDead = false;
@@ -33,6 +33,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // Consumable Potions ([F] Key)
     this.maxPotions = metaBonuses.maxPotions || 2;
     this.potions = (scene && scene.savedPotions !== undefined) ? scene.savedPotions : this.maxPotions;
+    this.potionCooldown = 0;
 
     // Form / Skull Swap (Skul: The Hero Slayer mechanic)
     this.activeForm = 'crusader'; // 'crusader' | 'berserker'
@@ -53,7 +54,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.isDashing = false;
     this.dashTimer = 0;
     this.dashCooldown = 0;
-    this.baseDashCooldown = Math.max(0.35, 0.65 - (metaBonuses.dashCooldownReduction || 0));
+    this.baseDashCooldown = Math.max(0.35, 0.65 * (metaBonuses.dashCooldownMult || 1.0));
     this.isParrying = false;
     this.parryTimer = 0;
     this.parryCooldown = 0;
@@ -75,12 +76,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     // Stat Modifiers from Relics & Gate Blessings
     this.statMods = {
-      damageMult: 1.0 + (metaBonuses.damageMult || 0),
+      damageMult: (metaBonuses.damageMult || 1.0),
       maxHpBonus: 0,
       lifesteal: 0.15,
       parryWindowBonus: 0,
       attackSpeedMult: 1.0,
-      corruptionGainMult: 1.0 + (metaBonuses.corruptionGainMult || 0),
+      corruptionGainMult: (metaBonuses.corruptionMult || 1.0),
       critChance: 0.10,
       critDamageBonus: 0.0,
       parryReflect: 1.0,
@@ -185,6 +186,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.parryCooldown > 0) this.parryCooldown -= dt;
     if (this.attackCooldown > 0) this.attackCooldown -= dt;
     if (this.attackAnimTimer > 0) this.attackAnimTimer -= dt;
+    if (this.potionCooldown > 0) this.potionCooldown -= dt;
     if (this.swapCooldown > 0) {
       this.swapCooldown -= dt;
       EventBus.emit('swap:cooldown', { current: Math.max(0, this.swapCooldown), max: 6.0 });
@@ -192,6 +194,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.comboTimer > 0) {
       this.comboTimer -= dt;
       if (this.comboTimer <= 0) this.comboStep = 0;
+    }
+
+    // Ambient Form Particles (subtle visual indicator of active skull form)
+    if (this.active && !this.isDead && Math.random() > 0.82) {
+      if (this.isBeast) {
+        this.scene.juice.emitVoidEmbers(this.x + (Math.random() * 16 - 8), this.y + 10, 1);
+      } else {
+        this.scene.juice.emitHolySparks(this.x + (Math.random() * 16 - 8), this.y + 12, 1);
+      }
     }
 
     // Ground check & Coyote Time
@@ -253,8 +264,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    // Handle Beast Mode Decay & Loop
-    if (this.isBeast) {
+    // Handle Beast Mode Decay & Loop (only decays when awakened via [U], not skull form swap)
+    if (this.isBeast && this.beastTimer > 0) {
       this.beastTimer -= dt;
       this.corruption = Math.max(0, (this.beastTimer / this.maxBeastDuration) * 100);
       EventBus.emit('player:corruption_changed', { current: this.corruption, max: 100, isMax: false });
@@ -345,6 +356,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   tryDrinkPotion() {
     if (this.isDead || !this.active) return;
+    if (this.potionCooldown > 0) return; // Prevent accidental double-drinking
     if (this.potions <= 0) {
       EventBus.emit('notification:show', { text: 'NO POTIONS REMAINING!', color: '#ef4444' });
       try { SoundSynth.playHit(); } catch (e) {}
@@ -355,6 +367,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
+    this.potionCooldown = 1.0;
     this.potions--;
     const healAmount = Math.round(this.maxHp * 0.45);
     this.hp = Math.min(this.maxHp, this.hp + healAmount);
@@ -385,9 +398,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.activeForm = (this.activeForm === 'crusader') ? 'berserker' : 'crusader';
     this.isBeast = (this.activeForm === 'berserker');
     this.beastType = this.isBeast ? 'abyssal' : null;
+    this.setTexture(this.isBeast ? 'player-awakened' : 'player');
+    if (this.anims) {
+      const targetAnim = this.isBeast ? 'awakened-idle' : 'player-idle';
+      if (this.scene.anims.exists(targetAnim)) this.anims.play(targetAnim, true);
+    }
 
-    // Swap Shockwave (Skul Style): Deals burst damage and repels all nearby foes
-    this.scene.juice.addTrauma(0.65);
+    // Swap Shockwave (Skul Style): Deals burst tactical damage and repels all nearby foes
+    this.scene.juice.addTrauma(0.45);
     this.scene.cameras.main.flash(200, this.isBeast ? 180 : 50, this.isBeast ? 20 : 180, this.isBeast ? 50 : 255);
     this.scene.juice.emitHolySparks(this.x, this.y, 20);
     this.scene.juice.emitVoidEmbers(this.x, this.y, 24);
@@ -399,7 +417,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
           const d = Phaser.Math.Distance.Between(this.x, this.y, enemy.x, enemy.y);
           if (d < 160) {
             const knockDir = enemy.x > this.x ? 1 : -1;
-            enemy.takeDamage(60, this.x, true, true);
+            enemy.takeDamage(35, this.x, true, true);
             if (enemy && enemy.active && enemy.body && !enemy.isDead) {
               enemy.setVelocity(knockDir * 320, -160);
             }
@@ -457,7 +475,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.dashCooldown > 0 || this.isDashing || !this.body) return;
     this.isDashing = true;
     this.dashTimer = 0.22;
-    this.dashCooldown = this.isBeast ? 0.28 : 0.65;
+    this.dashCooldown = this.isBeast ? 0.28 : this.baseDashCooldown;
 
     // Movement direction takes priority, otherwise facing direction
     let dir = this.facing || 1;
@@ -740,8 +758,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   revertToKnight() {
-    this.isBeast = false;
-    this.beastType = null;
+    this.isBeast = (this.activeForm === 'berserker');
+    this.beastType = this.isBeast ? 'abyssal' : null;
+    this.beastTimer = 0;
     this.corruption = 0;
     try {
       localStorage.setItem('cursed_crusader_corruption', '0');
@@ -750,9 +769,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.anims) {
       this.anims.stop();
     }
-    this.setTexture('player');
-    if (this.scene.anims.exists('player-idle')) {
-      this.anims.play('player-idle');
+    this.setTexture(this.isBeast ? 'player-awakened' : 'player');
+    const idleKey = this.isBeast ? 'awakened-idle' : 'player-idle';
+    if (this.scene.anims.exists(idleKey)) {
+      this.anims.play(idleKey);
     }
     if (this.body) {
       this.body.setSize(26, 50).setOffset(28, 10);
