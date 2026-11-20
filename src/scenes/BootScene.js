@@ -9,12 +9,6 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload() {
-    // Remove HTML initial loading screen once Phaser boot is active
-    try {
-      const initialLoading = document.getElementById('initial-loading');
-      if (initialLoading) initialLoading.remove();
-    } catch (e) {}
-
     const { width, height } = this.scale;
 
     // 1. Loading Text & Progress Bar
@@ -42,13 +36,17 @@ export class BootScene extends Phaser.Scene {
       loadingText.destroy();
     });
 
-    // Safety timeout: transition smoothly if asset network delays
-    this.time.delayedCall(4500, () => {
-      if (this.scene.isActive('boot')) {
-        console.warn('BootScene timeout reached, starting main menu');
+    // Robust safety fallback: If for any reason asset loading takes longer than 2.5s, force transition
+    this.bootTimeout = setTimeout(() => {
+      console.warn('BootScene timeout reached, forcing transition to main menu');
+      try {
+        const initialLoading = document.getElementById('initial-loading');
+        if (initialLoading) initialLoading.remove();
+      } catch (e) {}
+      if (this.scene) {
         this.scene.start('main-menu');
       }
-    });
+    }, 2500);
 
     // 2. Preload Gothicvania Spritesheets (Ansimuz itch.io collection)
     this.load.spritesheet('player', 'assets/spritesheets/player.png', {
@@ -128,8 +126,7 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 64, frameHeight: 96
     });
 
-    // 6. Sound Effects & Music
-    this.load.audio('bgm-temple', 'assets/audio/music/ockaie_temple.ogg');
+    // 6. Sound Effects (Lightweight 6KB micro-files, non-blocking)
     this.load.audio('sfx-jump', 'assets/audio/sfx/jump.ogg');
     this.load.audio('sfx-attack', 'assets/audio/sfx/attack.ogg');
     this.load.audio('sfx-hurt', 'assets/audio/sfx/hurt.ogg');
@@ -137,9 +134,19 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
+    if (this.bootTimeout) {
+      clearTimeout(this.bootTimeout);
+      this.bootTimeout = null;
+    }
+
+    // Smoothly fade out HTML initial loading screen now that canvas textures are ready
     try {
       const initialLoading = document.getElementById('initial-loading');
-      if (initialLoading) initialLoading.remove();
+      if (initialLoading) {
+        initialLoading.style.opacity = '0';
+        initialLoading.style.transition = 'opacity 0.25s ease';
+        setTimeout(() => initialLoading.remove(), 250);
+      }
     } catch (e) {}
 
     // 1. Generate complementary procedural canvas textures (gates, relics, pickups, slashes)

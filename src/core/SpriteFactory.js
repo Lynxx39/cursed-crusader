@@ -582,49 +582,64 @@ export class SpriteFactory {
       scene.textures.addCanvas('urn_clay', c);
     }
 
-    // Rusted Iron Impalement Hazard Spikes (32x24) - Gothic Medieval Impalement
+    // Rusted Iron Impalement Hazard Spikes (32x24) - Authentic Dark Gothic Stakes
     if (!scene.textures.exists('hazard_spikes')) {
       const c = document.createElement('canvas');
       c.width = 32; c.height = 24;
       const ctx = c.getContext('2d');
       ctx.imageSmoothingEnabled = false;
 
-      // Heavy dark stone plinth base
-      ctx.fillStyle = '#090d16'; ctx.fillRect(0, 18, 32, 6);
-      ctx.fillStyle = '#1e293b'; ctx.fillRect(1, 19, 30, 2);
-      ctx.fillStyle = '#0f172a'; ctx.fillRect(2, 21, 28, 3);
+      // Heavy weathered iron plinth
+      ctx.fillStyle = '#0a0d14'; ctx.fillRect(0, 20, 32, 4);
+      ctx.fillStyle = '#1e293b'; ctx.fillRect(1, 20, 30, 2);
+      ctx.fillStyle = '#334155'; ctx.fillRect(2, 22, 28, 1);
 
-      // Staggered gothic blackened iron pikes with blood and bone fragments
-      const drawGothicSpike = (sx, h, barbDir = 0) => {
-        const topY = 18 - h;
-        // Iron base
-        ctx.fillStyle = '#1e293b'; ctx.fillRect(sx - 1, 14, 5, 4);
-        ctx.fillStyle = '#334155'; ctx.fillRect(sx, 10, 3, 5);
-        // Tapered shaft & blade
-        ctx.fillStyle = '#475569'; ctx.fillRect(sx, topY + 4, 3, h - 8);
-        ctx.fillStyle = '#94a3b8'; ctx.fillRect(sx + 1, topY + 1, 1, h - 4);
-        // Barbed hook
-        if (barbDir !== 0) {
-          ctx.fillStyle = '#475569';
-          ctx.fillRect(sx + barbDir * 2, topY + 6, 2, 2);
-        }
-        // Razor needle tip
-        ctx.fillStyle = '#e2e8f0'; ctx.fillRect(sx + 1, topY, 1, 2);
-        // Dripping crimson blood
-        ctx.fillStyle = '#dc2626'; ctx.fillRect(sx + 1, topY + 1, 1, 4);
-        ctx.fillStyle = '#991b1b'; ctx.fillRect(sx, topY + 3, 2, 3);
-        ctx.fillStyle = '#7f1d1d'; ctx.fillRect(sx + 1, topY + 7, 1, 2);
+      // Jagged medieval impalement triangular stakes
+      const drawTriSpike = (baseX, w, tipX, tipY) => {
+        // Dark iron silhouette
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.moveTo(baseX, 20);
+        ctx.lineTo(tipX, tipY);
+        ctx.lineTo(baseX + w, 20);
+        ctx.closePath();
+        ctx.fill();
+
+        // Shaded side
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.moveTo(baseX + 1, 20);
+        ctx.lineTo(tipX, tipY);
+        ctx.lineTo(tipX + 1, 20);
+        ctx.closePath();
+        ctx.fill();
+
+        // Highlight spine
+        ctx.fillStyle = '#475569';
+        ctx.beginPath();
+        ctx.moveTo(tipX, tipY + 2);
+        ctx.lineTo(tipX, 18);
+        ctx.stroke();
+
+        // Coagulated dried blood & barbed tip
+        ctx.fillStyle = '#991b1b';
+        ctx.fillRect(tipX - 1, tipY + 1, 3, 4);
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(tipX, tipY, 1, 3);
+        ctx.fillStyle = '#7f1d1d';
+        ctx.fillRect(tipX - 1, tipY + 5, 2, 3);
       };
 
-      drawGothicSpike(3, 16, 1);   // Spike 1 (16px)
-      drawGothicSpike(10, 21, -1); // Spike 2 (21px - tallest)
-      drawGothicSpike(18, 18, 1);  // Spike 3 (18px)
-      drawGothicSpike(26, 14, -1); // Spike 4 (14px)
+      // 3 natural asymmetrical medieval iron stakes (varying heights: 16px, 22px, 14px)
+      drawTriSpike(1, 9, 5, 4);    // Stake 1 (left, sharp & tall)
+      drawTriSpike(11, 11, 16, 1); // Stake 2 (center, tallest razor pike)
+      drawTriSpike(22, 9, 27, 6);  // Stake 3 (right, angled barb)
 
-      // Skewered skull fragment on center spike
-      ctx.fillStyle = '#cbd5e1'; ctx.fillRect(9, 13, 4, 4);
-      ctx.fillStyle = '#475569'; ctx.fillRect(10, 15, 1, 1); ctx.fillRect(12, 15, 1, 1);
-      ctx.fillStyle = '#7f1d1d'; ctx.fillRect(9, 16, 4, 1); // blood dribble
+      // Iron rivet bolts on the base
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(3, 21, 2, 2);
+      ctx.fillRect(15, 21, 2, 2);
+      ctx.fillRect(27, 21, 2, 2);
 
       scene.textures.addCanvas('hazard_spikes', c);
     }

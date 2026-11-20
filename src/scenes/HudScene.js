@@ -12,6 +12,7 @@ export class HudScene extends Phaser.Scene {
     const meta = MetaProgression.getInstance();
 
     this.createHealthAndCorruptionBars();
+    this.createExpeditionProgressBar();
     this.createRunStats(meta.bloodQuartz);
     this.createRelicsDisplay();
     this.createNotificationBanner();
@@ -23,6 +24,8 @@ export class HudScene extends Phaser.Scene {
     this.unsubs = [
       EventBus.on('player:hp_changed', ({ current, max }) => this.updateHp(current, max)),
       EventBus.on('player:corruption_changed', (data) => this.updateCorruption(data)),
+      EventBus.on('player:progress', (data) => this.updateProgress(data.currentX, data.maxX, data.zone)),
+      EventBus.on('zone:entered', (name) => this.showZoneBanner(name)),
       EventBus.on('beast:transformed', (data) => this.showBeastBanner(data)),
       EventBus.on('beast:reverted', () => this.hideBeastBanner()),
       EventBus.on('relic:acquired', (data) => this.updateRelics(data)),
@@ -126,6 +129,65 @@ export class HudScene extends Phaser.Scene {
     }).setOrigin(0, 0.5).setDepth(24);
   }
 
+  createExpeditionProgressBar() {
+    const cx = 480;
+    const cy = 18;
+    const barW = 280;
+
+    this.progressContainer = this.add.container(0, 0).setDepth(20);
+    const bg = this.add.rectangle(cx, cy, barW + 8, 12, 0x070a12, 0.85)
+      .setStrokeStyle(1, 0x334155);
+    const fill = this.add.rectangle(cx - barW / 2, cy - 3, 0, 6, 0x9333ea).setOrigin(0, 0);
+
+    const cursor = this.add.circle(cx - barW / 2, cy, 4, 0xf59e0b).setStrokeStyle(1, 0xffffff);
+
+    const label = this.add.text(cx, cy + 14, 'EXPEDITION: 0m / 5600m', {
+      fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#cbd5e1',
+      stroke: '#05070a', strokeThickness: 2
+    }).setOrigin(0.5);
+
+    this.progressContainer.add([bg, fill, cursor, label]);
+    this.progressFill = fill;
+    this.progressCursor = cursor;
+    this.progressLabel = label;
+    this.progressTrackW = barW;
+    this.progressTrackX = cx - barW / 2;
+  }
+
+  updateProgress(currentX, maxX, zoneName) {
+    if (!this.progressFill || !this.progressTrackW) return;
+    const ratio = Phaser.Math.Clamp(currentX / maxX, 0, 1);
+    this.progressFill.width = this.progressTrackW * ratio;
+    this.progressCursor.x = this.progressTrackX + this.progressTrackW * ratio;
+    const displayZone = zoneName ? zoneName.toUpperCase() : 'EXPEDITION';
+    this.progressLabel.setText(`${displayZone}: ${currentX}m / ${maxX}m`);
+  }
+
+  showZoneBanner(zoneName) {
+    if (!this.zoneBannerText) {
+      this.zoneBannerText = this.add.text(480, 120, '', {
+        fontFamily: 'Cinzel, serif',
+        fontSize: '20px',
+        fontStyle: 'bold',
+        color: '#fbbf24',
+        stroke: '#05070a',
+        strokeThickness: 6,
+        letterSpacing: 2
+      }).setOrigin(0.5).setDepth(40).setAlpha(0);
+    }
+    this.zoneBannerText.setText(`❖ ${zoneName.toUpperCase()} ❖`);
+    this.tweens.killTweensOf(this.zoneBannerText);
+    this.tweens.add({
+      targets: this.zoneBannerText,
+      alpha: 1,
+      y: 110,
+      duration: 400,
+      hold: 1800,
+      yoyo: true,
+      ease: 'Cubic.easeOut'
+    });
+  }
+
   createRunStats(initialQuartz = 0) {
     const rightX = 940;
     // Gilded Coin Icon next to gold
@@ -137,7 +199,7 @@ export class HudScene extends Phaser.Scene {
       stroke: '#05070a', strokeThickness: 3
     }).setOrigin(1, 0).setDepth(21);
 
-    this.roomText = this.add.text(rightX, 40, 'CHAMBER: I / X', {
+    this.roomText = this.add.text(rightX, 40, 'CHAMBER: 1 / 12', {
       fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold', color: '#cbd5e1',
       stroke: '#05070a', strokeThickness: 3
     }).setOrigin(1, 0).setDepth(21);
@@ -467,7 +529,7 @@ export class HudScene extends Phaser.Scene {
   }
 
   updateRoomNumber(num) {
-    this.roomText.setText(`CHAMBER: ${num} / 10`);
+    this.roomText.setText(`CHAMBER: ${num} / 12`);
   }
 
   updateGold(amt) {

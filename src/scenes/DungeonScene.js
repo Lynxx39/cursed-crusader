@@ -50,11 +50,11 @@ export class DungeonScene extends Phaser.Scene {
     // 2. Initialize Juice
     this.juice = new JuiceEngine(this);
 
-    // 3. Multi-Chapter Level Bounds (Boss Arenas: 2400px, Shop: 1400px, Standard: 4600px)
-    this.isBossChamber = this.currentRoom === 4 || this.currentRoom === 8 || this.currentRoom === 10;
-    this.isShopChamber = this.currentRoom === 5;
-    const WORLD_W = this.isShopChamber ? 1400 : (this.isBossChamber ? 2400 : 4600);
-    const WORLD_H = this.isBossChamber ? 600 : 650;
+    // 3. Multi-Chapter Level Bounds (Boss Arenas: 2400px, Shop: 1400px, Standard: 5600px)
+    this.isBossChamber = this.currentRoom === 3 || this.currentRoom === 6 || this.currentRoom === 9 || this.currentRoom === 12;
+    this.isShopChamber = this.currentRoom === 5 || this.currentRoom === 10;
+    const WORLD_W = this.isShopChamber ? 1400 : (this.isBossChamber ? 2400 : 5600);
+    const WORLD_H = this.isBossChamber ? 600 : 680;
     this.worldWidth = WORLD_W;
     this.worldHeight = WORLD_H;
     this.physics.world.setBounds(0, 0, WORLD_W, WORLD_H);
@@ -480,7 +480,7 @@ export class DungeonScene extends Phaser.Scene {
       }
     };
 
-    // Helper to build a proper deep chasm with vertical stone walls, pit floor, and spikes
+    // Helper to build a proper deep chasm with vertical stone walls, visual pit floor, and lethal spikes
     const buildDeepChasm = (startX, endX) => {
       // Left vertical cliff wall (at startX - 16, where floor drops off)
       const leftCorner = this.platforms.create(startX - 16, 560, 'tile_cliff_corner_left');
@@ -498,11 +498,11 @@ export class DungeonScene extends Phaser.Scene {
       const rightWall2 = this.platforms.create(endX + 16, 624, 'tile_cliff_right');
       rightWall2.refreshBody();
 
-      // Pit floor at the bottom of the chasm (y: 624) with spikes resting firmly on top!
+      // Visual stone plinth at bottom (NO solid physics body, so falling enemies plunge into spikes!)
       for (let px = startX + 16; px <= endX - 16; px += 32) {
-        const pitFloor = this.platforms.create(px, 624, 'tile_foundation');
-        pitFloor.refreshBody();
-        const spike = this.hazards.create(px, 604, 'hazard_spikes');
+        this.add.image(px, 624, 'tile_foundation').setDepth(1);
+        const spike = this.hazards.create(px, 608, 'hazard_spikes');
+        spike.body.setSize(32, 20).setOffset(0, 4);
         spike.refreshBody();
 
         // Creeping subterranean blood mist in the pit
@@ -520,27 +520,37 @@ export class DungeonScene extends Phaser.Scene {
       }
     };
 
-    // Floor 1 (Zone 1: Antechamber): x: 0 - 896 (Corner at 912)
-    buildFloorSegment(0, 896);
-    // Chasm 1 (x: 928 - 1120) -> Authentic deep pit with walls and bottom spikes
-    buildDeepChasm(928, 1120);
-    this.createPlatformSlab(970, 460, 3); // Stepping Stone Island
+    // =========================================================================
+    // 5-ZONE EXPANSIVE DUNGEON ARCHITECTURE (5600px Side-Scrolling Odyssey)
+    // =========================================================================
 
-    // Floor 2 (Zone 2: Catacombs): x: 1152 - 1984 (Corners at 1136 & 2000)
-    buildFloorSegment(1152, 1984);
-    // Chasm 2 (x: 2016 - 2240) -> Authentic deep pit
-    buildDeepChasm(2016, 2240);
-    this.createPlatformSlab(2050, 460, 2); // Bridge pillar 1
-    this.createPlatformSlab(2140, 420, 2); // Bridge pillar 2
+    // Floor 1 (Zone 1: The Forsaken Cathedral Nave): x: 0 - 1056
+    buildFloorSegment(0, 1056);
+    // Chasm 1 (x: 1088 - 1280) -> Deep abyss with stepping stone platform
+    buildDeepChasm(1088, 1280);
+    this.createPlatformSlab(1140, 470, 3); // Stepping Stone Island
 
-    // Floor 3 (Zone 3: Forgotten Spire): x: 2272 - 3072 (Corners at 2256 & 3088)
-    buildFloorSegment(2272, 3072);
-    // Chasm 3 (x: 3104 - 3328) -> Authentic deep pit
-    buildDeepChasm(3104, 3328);
-    this.createPlatformSlab(3170, 460, 3); // Stepping Stone Island
+    // Floor 2 (Zone 2: Sunken Crypts & Mausoleums): x: 1312 - 2240
+    buildFloorSegment(1312, 2240);
+    // Chasm 2 (x: 2272 - 2464) -> Ancient Crypt Chasm
+    buildDeepChasm(2272, 2464);
+    this.createPlatformSlab(2320, 460, 2); // Bridge pillar 1
+    this.createPlatformSlab(2400, 420, 2); // Bridge pillar 2
 
-    // Floor 4 (Zone 4 & 5: Armory & Gates Terrace): x: 3360 - worldW (Corner at 3344)
-    buildFloorSegment(3360, worldW);
+    // Floor 3 (Zone 3: Clocktower of Ashes & Blood Altar): x: 2496 - 3488
+    buildFloorSegment(2496, 3488);
+    // Chasm 3 (x: 3520 - 3712) -> Gear Moat
+    buildDeepChasm(3520, 3712);
+    this.createPlatformSlab(3580, 460, 3); // Stepping Stone Island
+
+    // Floor 4 (Zone 4: Inquisitor's Fortified Bastion): x: 3744 - 4736
+    buildFloorSegment(3744, 4736);
+    // Chasm 4 (x: 4768 - 4960) -> Fortress Outer Trench
+    buildDeepChasm(4768, 4960);
+    this.createPlatformSlab(4820, 460, 3); // Castle Drawbridge Remnant
+
+    // Floor 5 (Zone 5: The Gates of Destiny Grand Terrace): x: 4992 - worldW
+    buildFloorSegment(4992, worldW);
 
     // Outer Boundaries
     for (let y = 0; y < worldH; y += 32) {
@@ -550,37 +560,63 @@ export class DungeonScene extends Phaser.Scene {
 
     // Safety Floor at very bottom to catch any deep falls
     for (let x = 0; x < worldW; x += 64) {
-      const bTile = this.platforms.create(x + 32, 640, 'tile_foundation');
+      const bTile = this.platforms.create(x + 32, 650, 'tile_foundation');
       bTile.setVisible(false).refreshBody();
     }
 
-    // 2. Zone 1: Cathedral Antechamber & Courtyard (x: 100 - 900)
-    this.createPlatformSlab(240, 450, 4);
-    this.createPlatformSlab(480, 360, 5);
-    this.createPlatformSlab(720, 440, 4);
-    this.createTorch(200, 410);
-    this.createTorch(540, 320);
-    this.createTorch(820, 400);
-    this.createUrn(500, 334);
-    this.createUrn(560, 334);
-    this.createUrn(740, 414);
+    // -------------------------------------------------------------------------
+    // ZONE 1: THE FORSAKEN CATHEDRAL NAVE (x: 0 - 1088)
+    // -------------------------------------------------------------------------
+    // High Choir Balconies & Catwalks (Verticality!)
+    this.createPlatformSlab(240, 440, 5);
+    this.createPlatformSlab(480, 340, 6); // High Organ Gallery
+    this.createPlatformSlab(760, 430, 5);
+    this.createPlatformSlab(940, 360, 3); // Lookout Catwalk
 
-    // 3. Zone 2: Sunken Catacombs & Ramparts (x: 1100 - 2000)
-    this.createPlatformSlab(1160, 440, 4);
-    this.createPlatformSlab(1360, 350, 6);
-    this.createPlatformSlab(1620, 260, 5); // High Cathedral Arch
-    this.createPlatformSlab(1840, 370, 4);
-    this.createTorch(1200, 400);
-    this.createTorch(1450, 310);
-    this.createTorch(1700, 220);
-    this.createTorch(1900, 330);
-    this.createUrn(1390, 324);
-    this.createUrn(1450, 324);
-    this.createUrn(1660, 234);
+    this.createTorch(200, 400);
+    this.createTorch(520, 300);
+    this.createTorch(780, 390);
+    this.createTorch(960, 320);
 
-    // 4. Zone 3: Forgotten Spire & Altar of Sacrifice (x: 2200 - 3100)
-    this.createPlatformSlab(2440, 532, 5); // Raised dais for Blood Altar
-    this.shrineGlow = this.add.image(2508, 490, 'shrine_glow').setBlendMode(Phaser.BlendModes.ADD).setDepth(3).setAlpha(0.65);
+    this.createUrn(490, 314);
+    this.createUrn(550, 314);
+    this.createUrn(780, 404);
+    this.createUrn(950, 334);
+
+    // -------------------------------------------------------------------------
+    // ZONE 2: SUNKEN CRYPTS & MAUSOLEUMS (x: 1312 - 2272)
+    // -------------------------------------------------------------------------
+    this.createPlatformSlab(1360, 440, 5);
+    this.createPlatformSlab(1580, 350, 6); // Royal Mausoleum Arch
+    this.createPlatformSlab(1860, 270, 5); // Crypt Vault Peak
+    this.createPlatformSlab(2060, 400, 5);
+
+    // Ancient Stone Coffins on ground level (breakable for gold!)
+    if (this.textures.exists('prop_coffin')) {
+      this.add.image(1480, 536, 'prop_coffin').setDepth(3);
+      this.add.image(1920, 536, 'prop_coffin').setDepth(3);
+    }
+    if (this.textures.exists('prop_soul_lantern')) {
+      this.add.image(1400, 530, 'prop_soul_lantern').setDepth(3);
+      this.add.image(2140, 530, 'prop_soul_lantern').setDepth(3);
+    }
+
+    this.createTorch(1400, 400);
+    this.createTorch(1650, 310);
+    this.createTorch(1900, 230);
+    this.createTorch(2120, 360);
+
+    this.createUrn(1600, 324);
+    this.createUrn(1660, 324);
+    this.createUrn(1880, 244);
+    this.createUrn(2080, 374);
+
+    // -------------------------------------------------------------------------
+    // ZONE 3: CLOCKTOWER OF ASHES & BLOOD ALTAR (x: 2496 - 3520)
+    // -------------------------------------------------------------------------
+    // Raised Dais for Altar of Sacrifice
+    this.createPlatformSlab(2780, 520, 6);
+    this.shrineGlow = this.add.image(2876, 478, 'shrine_glow').setBlendMode(Phaser.BlendModes.ADD).setDepth(3).setAlpha(0.65);
     this.tweens.add({
       targets: this.shrineGlow,
       alpha: { from: 0.45, to: 0.8 },
@@ -590,44 +626,60 @@ export class DungeonScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Sine.easeInOut'
     });
-    this.shrine = this.add.sprite(2508, 508, 'shrine_blood').setDepth(5);
+    this.shrine = this.add.sprite(2876, 496, 'shrine_blood').setDepth(5);
     this.shrineUsed = false;
 
-    this.createPlatformSlab(2280, 440, 4);
-    this.createPlatformSlab(2520, 350, 6);
-    this.createPlatformSlab(2780, 250, 5); // Clocktower Peak
-    this.createPlatformSlab(2940, 380, 4);
-    this.createTorch(2320, 400);
-    this.createTorch(2600, 310);
-    this.createTorch(2840, 210);
-    this.createTorch(2440, 490);
-    this.createTorch(2580, 490);
-    this.createUrn(2310, 414);
-    this.createUrn(2560, 324);
-    this.createUrn(2800, 224);
-    this.createUrn(2970, 354);
+    // Ascending Clockwork Platforms
+    this.createPlatformSlab(2560, 430, 4);
+    this.createPlatformSlab(2820, 340, 6);
+    this.createPlatformSlab(3080, 250, 5); // Clockwork Tower Summit
+    this.createPlatformSlab(3320, 380, 4);
 
-    // 5. Zone 4: Inquisitor's Armory (x: 3280 - 4150)
-    this.createPlatformSlab(3340, 440, 4);
-    this.createPlatformSlab(3560, 350, 6); // Armory Cache
-    this.createPlatformSlab(3820, 270, 5);
-    this.createPlatformSlab(4020, 410, 4);
-    this.createTorch(3380, 400);
-    this.createTorch(3650, 310);
-    this.createTorch(3900, 230);
-    this.createTorch(4060, 370);
-    this.createUrn(3590, 324);
-    this.createUrn(3650, 324);
-    this.createUrn(3710, 324);
-    this.createUrn(3860, 244);
+    // Treasure Chest at Tower Summit!
+    if (this.textures.exists('prop_chest')) {
+      this.add.image(3140, 226, 'prop_chest').setScale(1.1).setDepth(4);
+    }
 
-    // 6. Zone 5: The Gates of Destiny Grand Terrace (x: 4150 - 4600)
-    this.createPlatformSlab(4160, 510, 3);
-    this.createPlatformSlab(4260, 460, 3);
-    this.createPlatformSlab(4360, 410, 8); // Grand Portal Dais
-    this.createTorch(4380, 370);
-    this.createTorch(4600, 370);
-    this.createUrn(4580, 384);
+    this.createTorch(2580, 390);
+    this.createTorch(2860, 300);
+    this.createTorch(3120, 210);
+    this.createTorch(3340, 340);
+    this.createTorch(2790, 478);
+    this.createTorch(2960, 478);
+
+    this.createUrn(2580, 404);
+    this.createUrn(2840, 314);
+    this.createUrn(2900, 314);
+    this.createUrn(3340, 354);
+
+    // -------------------------------------------------------------------------
+    // ZONE 4: INQUISITOR'S FORTIFIED BASTION (x: 3744 - 4768)
+    // -------------------------------------------------------------------------
+    this.createPlatformSlab(3820, 440, 5);
+    this.createPlatformSlab(4080, 340, 6); // Fortress Battlement
+    this.createPlatformSlab(4360, 260, 5); // High Watchtower
+    this.createPlatformSlab(4580, 400, 4);
+
+    this.createTorch(3860, 400);
+    this.createTorch(4140, 300);
+    this.createTorch(4400, 220);
+    this.createTorch(4620, 360);
+
+    this.createUrn(4100, 314);
+    this.createUrn(4160, 314);
+    this.createUrn(4380, 234);
+    this.createUrn(4600, 374);
+
+    // -------------------------------------------------------------------------
+    // ZONE 5: THE GATES OF DESTINY GRAND TERRACE (x: 4992 - 5600)
+    // -------------------------------------------------------------------------
+    this.createPlatformSlab(5060, 510, 3);
+    this.createPlatformSlab(5180, 460, 3);
+    this.createPlatformSlab(5300, 410, 8); // Grand Portal Dais (Hosts the 2 Living Archway Gates)
+
+    this.createTorch(5320, 370);
+    this.createTorch(5520, 370);
+    this.createUrn(5510, 384);
   }
 
   createPlatformSlab(startX, y, count) {
@@ -777,54 +829,57 @@ export class DungeonScene extends Phaser.Scene {
       return enemy;
     };
 
-    // 1. Zone 1: Cathedral Antechamber (x: 200 - 800)
+    // 1. Zone 1: Cathedral Antechamber (x: 200 - 950)
     const z1Ghouls = Math.min(3, 2 + Math.floor(room * 0.4));
     for (let i = 0; i < z1Ghouls; i++) {
-      spawnEnemy(320 + i * 120, 510, 'ghoul');
+      spawnEnemy(360 + i * 160, 510, 'ghoul');
     }
-    // High sniper & flying predator in Zone 1
-    spawnEnemy(480, 310, 'cultist');
-    spawnEnemy(620, 360, 'bat');
+    spawnEnemy(480, 290, 'cultist');
+    spawnEnemy(820, 380, 'bat');
 
-    // 2. Zone 2: Sunken Catacombs & Ramparts (x: 1100 - 1950)
+    // 2. Zone 2: Sunken Crypts & Mausoleums (x: 1312 - 2240)
     const z2Ghouls = Math.min(3, 2 + Math.floor(room * 0.4));
     for (let i = 0; i < z2Ghouls; i++) {
-      spawnEnemy(1200 + i * 140, 510, 'ghoul');
+      spawnEnemy(1450 + i * 150, 510, 'ghoul');
     }
-    spawnEnemy(1450, 510, 'skeleton'); // Armored Skeleton
-    spawnEnemy(1360, 300, 'cultist');
-    spawnEnemy(1720, 340, 'bat');
+    spawnEnemy(1800, 510, 'skeleton');
+    spawnEnemy(2050, 510, 'skeleton');
+    spawnEnemy(1580, 300, 'cultist');
+    spawnEnemy(1860, 220, 'bat');
     if (room >= 2) {
-      spawnEnemy(1580, 500, 'elite');
+      spawnEnemy(1950, 500, 'elite');
     }
 
-    // 3. Zone 3: Forgotten Spire & Altar Guard (x: 2200 - 3000)
-    spawnEnemy(2400, 500, 'elite');
-    spawnEnemy(2620, 510, 'skeleton');
-    spawnEnemy(2780, 510, 'skeleton');
-    spawnEnemy(2520, 300, 'sorcerer'); // Dark Sorcerer
+    // 3. Zone 3: Clocktower of Ashes & Blood Altar (x: 2496 - 3488)
+    spawnEnemy(2720, 500, 'elite');
+    spawnEnemy(2950, 510, 'skeleton');
+    spawnEnemy(3150, 510, 'skeleton');
+    spawnEnemy(3080, 200, 'sorcerer');
     if (room >= 3) {
-      spawnEnemy(2880, 360, 'bat');
+      spawnEnemy(3280, 330, 'bat');
     }
 
-    // 4. Zone 4: Inquisitor's Armory (x: 3300 - 4100)
+    // 4. Zone 4: Inquisitor's Fortified Bastion (x: 3744 - 4736)
     const z4Ghouls = Math.min(3, 2 + Math.floor(room * 0.5));
     for (let i = 0; i < z4Ghouls; i++) {
-      spawnEnemy(3400 + i * 130, 510, 'ghoul');
+      spawnEnemy(3880 + i * 140, 510, 'ghoul');
     }
-    spawnEnemy(3560, 300, 'sorcerer');
-    spawnEnemy(3700, 510, 'skeleton');
+    spawnEnemy(4080, 290, 'sorcerer');
+    spawnEnemy(4360, 510, 'skeleton');
     if (room >= 2) {
-      spawnEnemy(3850, 500, 'elite');
+      spawnEnemy(4480, 500, 'elite');
     }
     if (room >= 3) {
-      spawnEnemy(3980, 340, 'bat');
+      spawnEnemy(4620, 350, 'bat');
     }
 
-    // 5. Zone 5: Grand Terrace Guardians (x: 4150 - 4500)
-    spawnEnemy(4180, 480, 'skeleton');
+    // 5. Zone 5: Grand Terrace Guardians (x: 4992 - 5400)
+    spawnEnemy(5120, 510, 'skeleton');
     if (room >= 2) {
-      spawnEnemy(4320, 430, 'cultist');
+      spawnEnemy(5260, 360, 'cultist');
+    }
+    if (room >= 3) {
+      spawnEnemy(5380, 360, 'elite');
     }
 
     // 6. Time-based Escalation: Blood Horde Reinforcements if taking too long
@@ -878,31 +933,8 @@ export class DungeonScene extends Phaser.Scene {
     this.enemies = [];
     this.enemyGroup.clear(true, true);
 
-    if (this.currentRoom === 4) {
-      // CHAPTER 1 BOSS: High Inquisitor Malakor
-      this.boss = new Enemy(this, 1400, 480, 'cultist');
-      this.boss.isBoss = true;
-      const roomScale = 1.0 + Math.max(0, this.currentRoom - 1) * 0.16;
-      this.boss.maxHp = Math.round(680 * roomScale);
-      this.boss.hp = this.boss.maxHp;
-      this.boss.setScale(1.55);
-      this.boss.setTint(0xef4444);
-      this.boss.damage = Math.round(24 * (1.0 + (this.currentRoom - 1) * 0.14));
-      this.boss.attackRange = 320;
-      this.boss.body.setSize(38, 54).setOffset(20, 10);
-
-      this.physics.add.collider(this.boss, this.platforms);
-      this.enemies.push(this.boss);
-      this.enemyGroup.add(this.boss);
-
-      const acolyte = new Enemy(this, 780, 310, 'cultist');
-      this.physics.add.collider(acolyte, this.platforms);
-      this.enemies.push(acolyte);
-      this.enemyGroup.add(acolyte);
-
-      EventBus.emit('boss:spawned', { name: 'HIGH INQUISITOR MALAKOR', maxHp: this.boss.maxHp });
-    } else if (this.currentRoom === 8) {
-      // CHAPTER 2 BOSS: General Vane the Decapitator
+    if (this.currentRoom === 3) {
+      // ACT 1 BOSS: General Vane the Iron Executioner
       this.boss = new Enemy(this, 1400, 480, 'general_vane');
       this.physics.add.collider(this.boss, this.platforms);
       this.enemies.push(this.boss);
@@ -915,10 +947,24 @@ export class DungeonScene extends Phaser.Scene {
       this.enemyGroup.add(minion1);
       this.enemyGroup.add(minion2);
 
-      EventBus.emit('boss:spawned', { name: 'GENERAL VANE THE DECAPITATOR', maxHp: this.boss.maxHp });
-    } else if (this.currentRoom === 10) {
-      // CHAPTER 3 FINAL BOSS: Void Arch-Seraph Belial
-      this.boss = new Enemy(this, 1200, 260, 'belial');
+      EventBus.emit('boss:spawned', { name: 'GENERAL VANE THE IRON EXECUTIONER', maxHp: this.boss.maxHp });
+    } else if (this.currentRoom === 6) {
+      // ACT 2 BOSS: High Inquisitor Malakor
+      this.boss = new Enemy(this, 1300, 260, 'malakor');
+      this.physics.add.collider(this.boss, this.platforms);
+      this.enemies.push(this.boss);
+      this.enemyGroup.add(this.boss);
+
+      const bat1 = new Enemy(this, 600, 280, 'bat');
+      const bat2 = new Enemy(this, 1900, 280, 'bat');
+      this.enemies.push(bat1, bat2);
+      this.enemyGroup.add(bat1);
+      this.enemyGroup.add(bat2);
+
+      EventBus.emit('boss:spawned', { name: 'HIGH INQUISITOR MALAKOR', maxHp: this.boss.maxHp });
+    } else if (this.currentRoom === 9) {
+      // ACT 3 BOSS: Void Arch-Seraph Belial
+      this.boss = new Enemy(this, 1200, 240, 'belial');
       this.physics.add.collider(this.boss, this.platforms);
       this.enemies.push(this.boss);
       this.enemyGroup.add(this.boss);
@@ -931,6 +977,21 @@ export class DungeonScene extends Phaser.Scene {
       this.enemyGroup.add(sorcerer2);
 
       EventBus.emit('boss:spawned', { name: 'VOID ARCH-SERAPH BELIAL', maxHp: this.boss.maxHp });
+    } else if (this.currentRoom === 12) {
+      // ACT 4 FINAL CLIMAX BOSS: The Cursed King Aldous & Primordial Void Heart
+      this.boss = new Enemy(this, 1300, 480, 'cursed_king');
+      this.physics.add.collider(this.boss, this.platforms);
+      this.enemies.push(this.boss);
+      this.enemyGroup.add(this.boss);
+
+      const guard1 = new Enemy(this, 750, 480, 'elite');
+      const guard2 = new Enemy(this, 1750, 480, 'elite');
+      this.physics.add.collider([guard1, guard2], this.platforms);
+      this.enemies.push(guard1, guard2);
+      this.enemyGroup.add(guard1);
+      this.enemyGroup.add(guard2);
+
+      EventBus.emit('boss:spawned', { name: 'THE CURSED KING ALDOUS', maxHp: this.boss.maxHp });
     }
 
     this.juice.addTrauma(0.85);
@@ -946,8 +1007,27 @@ export class DungeonScene extends Phaser.Scene {
       this.player.update(time, delta);
       if (this.player.y > 615) {
         this.onPlayerHitHazard({ x: this.player.x });
-        this.player.setPosition(this.player.x, 500);
+        this.player.setPosition(Math.max(120, this.player.x - 80), 490);
+        this.player.setVelocity(0, -120);
       }
+
+      // Real-time Expedition Distance & Zone Tracking
+      const playerX = Math.round(this.player.x);
+      let currentZone = 'Cathedral Nave';
+      if (playerX >= 4900) currentZone = 'Gates of Destiny';
+      else if (playerX >= 3700) currentZone = 'Inquisitor\'s Bastion';
+      else if (playerX >= 2460) currentZone = 'Clocktower & Blood Altar';
+      else if (playerX >= 1250) currentZone = 'Sunken Crypts';
+
+      if (this.lastZone !== currentZone) {
+        this.lastZone = currentZone;
+        EventBus.emit('zone:entered', currentZone);
+      }
+      EventBus.emit('player:progress', {
+        currentX: playerX,
+        maxX: this.worldWidth,
+        zone: currentZone
+      });
     }
 
     // Prune dead/inactive enemies to guarantee room clearance never deadlocks
@@ -1463,29 +1543,43 @@ export class DungeonScene extends Phaser.Scene {
       });
     };
 
-    // Skul-Style Gate Pairings based on Chamber Progression:
-    if (this.currentRoom === 3 || this.currentRoom === 7 || this.currentRoom === 9) {
-      // Room preceding the Boss chamber: Show Dread Sanctum Boss Gate!
-      const gateX = this.isBossChamber ? 1200 : 4490;
-      createGateWithLabel(gateX, 'gate_boss', 'anim-gate-boss', 'boss', '⚔ DREAD SANCTUM (BOSS)', '#f87171');
+    // Skul-Style Gate Pairings based on 12-Chamber Campaign Progression:
+    if (this.currentRoom === 2) {
+      // Preceding Act 1 Boss: General Vane
+      createGateWithLabel(5400, 'gate_boss', 'anim-gate-boss', 'boss', '⚔ ACT 1 BOSS: GENERAL VANE', '#f87171');
+    } else if (this.currentRoom === 3) {
+      // After beating General Vane
+      createGateWithLabel(1200, 'gate_relic', 'anim-gate-relic', 'relic', '◆ ENTER ACT 2: SUNKEN CRYPTS', '#c084fc');
     } else if (this.currentRoom === 4) {
-      // After beating Chapter 1 boss: Gate to Chapter 2 Merchant Bazaar!
-      createGateWithLabel(1200, 'gate_gold', 'anim-gate-gold', 'gold', '❖ THE COLLECTOR\'S BAZAAR', '#fde047');
+      // Before Act 2 Merchant Shop
+      createGateWithLabel(5400, 'gate_gold', 'anim-gate-gold', 'gold', '❖ THE COLLECTOR\'S BAZAAR (SHOP)', '#fde047');
     } else if (this.currentRoom === 5) {
-      // Exit from Shop to Chamber 6
-      createGateWithLabel(1180, 'gate_boss', 'anim-gate-boss', 'boss', '❖ DEEPER CATACOMBS (CHAMBER 6)', '#c084fc');
+      // Exit from Shop into Act 2 Boss Malakor
+      createGateWithLabel(1180, 'gate_boss', 'anim-gate-boss', 'boss', '⚔ ACT 2 BOSS: INQUISITOR MALAKOR', '#34d399');
+    } else if (this.currentRoom === 6) {
+      // After beating Malakor: Enter Act 3 Clocktower
+      createGateWithLabel(1200, 'gate_relic', 'anim-gate-relic', 'relic', '◆ ENTER ACT 3: CLOCKTOWER OF ASHES', '#c084fc');
     } else if (this.currentRoom === 8) {
-      // After beating Chapter 2 boss: Gate to High Spire!
-      createGateWithLabel(1200, 'gate_relic', 'anim-gate-relic', 'relic', '◆ FORGOTTEN SPIRE', '#c084fc');
+      // Preceding Act 3 Boss: Belial
+      createGateWithLabel(5400, 'gate_boss', 'anim-gate-boss', 'boss', '⚔ ACT 3 BOSS: ARCH-SERAPH BELIAL', '#c084fc');
+    } else if (this.currentRoom === 9) {
+      // After beating Belial: Royal Sanctuary
+      createGateWithLabel(1200, 'gate_gold', 'anim-gate-gold', 'gold', '❖ ROYAL SANCTUARY BAZAAR', '#fde047');
     } else if (this.currentRoom === 10) {
-      // After beating Final Boss Belial: Glorious Victory Vault!
-      createGateWithLabel(1200, 'gate_gold', 'anim-gate-gold', 'victory', '👑 ETERNAL PURIFICATION (VICTORY)', '#34d399');
+      // Exit from Royal Sanctuary
+      createGateWithLabel(1180, 'gate_relic', 'anim-gate-relic', 'relic', '◆ THRONE ANTECHAMBER (CHAMBER 11)', '#e879f9');
+    } else if (this.currentRoom === 11) {
+      // Preceding Final Boss
+      createGateWithLabel(5400, 'gate_boss', 'anim-gate-boss', 'boss', '👑 FINAL CLIMAX: THE CURSED KING ALDOUS', '#ef4444');
+    } else if (this.currentRoom === 12) {
+      // After beating Final Boss: True Victory!
+      createGateWithLabel(1200, 'gate_gold', 'anim-gate-gold', 'victory', '👑 ETERNAL ASCENSION (TRUE VICTORY)', '#34d399');
     } else if (this.currentRoom % 2 === 1) {
-      createGateWithLabel(4420, 'gate_gold', 'anim-gate-gold', 'gold', '❖ GOLD VAULT', '#fde047');
-      createGateWithLabel(4560, 'gate_relic', 'anim-gate-relic', 'relic', '◆ RELIC ALTAR', '#e879f9');
+      createGateWithLabel(5340, 'gate_gold', 'anim-gate-gold', 'gold', '❖ GOLD VAULT', '#fde047');
+      createGateWithLabel(5480, 'gate_relic', 'anim-gate-relic', 'relic', '◆ RELIC ALTAR', '#e879f9');
     } else {
-      createGateWithLabel(4420, 'gate_relic', 'anim-gate-relic', 'relic', '◆ RELIC ALTAR', '#e879f9');
-      createGateWithLabel(4560, 'gate_beast', 'anim-gate-beast', 'altar', '☠ BEAST ALTAR', '#34d399');
+      createGateWithLabel(5340, 'gate_relic', 'anim-gate-relic', 'relic', '◆ RELIC ALTAR', '#e879f9');
+      createGateWithLabel(5480, 'gate_beast', 'anim-gate-beast', 'altar', '☠ BEAST ALTAR', '#34d399');
     }
   }
 

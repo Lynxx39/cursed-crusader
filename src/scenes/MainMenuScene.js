@@ -130,10 +130,22 @@ export class MainMenuScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-SPACE', () => this.startExpedition());
     this.input.keyboard.on('keydown-ENTER', () => this.startExpedition());
 
-    // 7. Ambient BGM (Ockaie Temple)
+    // 7. Ambient BGM (Lazy background loading so initial menu boots instantly)
     try {
-      if (this.cache.audio.exists('bgm-temple') && (!this.sound.get('bgm-temple') || !this.sound.get('bgm-temple').isPlaying)) {
-        this.sound.play('bgm-temple', { loop: true, volume: 0.35 });
+      if (this.cache.audio.exists('bgm-temple')) {
+        if (!this.sound.get('bgm-temple') || !this.sound.get('bgm-temple').isPlaying) {
+          this.sound.play('bgm-temple', { loop: true, volume: 0.35 });
+        }
+      } else {
+        this.load.audio('bgm-temple', 'assets/audio/music/ockaie_temple.ogg');
+        this.load.once('filecomplete-audio-bgm-temple', () => {
+          try {
+            if (this.scene.isActive('main-menu') && (!this.sound.get('bgm-temple') || !this.sound.get('bgm-temple').isPlaying)) {
+              this.sound.play('bgm-temple', { loop: true, volume: 0.35 });
+            }
+          } catch (e) {}
+        });
+        this.load.start();
       }
     } catch (e) {}
 

@@ -13,6 +13,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (type === 'sorcerer') texture = 'sorcerer';
     if (type === 'general_vane') texture = 'skeleton';
     if (type === 'belial') texture = 'sorcerer';
+    if (type === 'malakor') texture = 'sorcerer';
+    if (type === 'cursed_king') texture = 'player-awakened';
 
     super(scene, x, y, texture);
     scene.add.existing(this);
@@ -21,12 +23,14 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.enemyType = type;
     this.setCollideWorldBounds(true);
 
+    const isLargeBoss = (type === 'elite' || type === 'general_vane' || type === 'belial' || type === 'malakor' || type === 'cursed_king');
+
     // Grounded Drop-Shadow for 16-bit depth (except flying bat)
     if (type !== 'bat' && scene.textures.exists('shadow_ellipse')) {
-      const shadowY = (type === 'elite' || type === 'general_vane' || type === 'belial') ? y + 36 : y + 24;
+      const shadowY = isLargeBoss ? y + 36 : y + 24;
       this.shadow = scene.add.image(x, shadowY, 'shadow_ellipse').setDepth(this.depth - 1).setAlpha(0.45);
-      if (type === 'elite' || type === 'general_vane' || type === 'belial') {
-        this.shadow.setScale(1.5, 1.3);
+      if (isLargeBoss) {
+        this.shadow.setScale(1.6, 1.4);
       }
     }
 
@@ -131,6 +135,38 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.starfallCooldown = 5.0;
       this.beamCooldown = 6.5;
       this.homeY = y;
+    } else if (type === 'malakor') {
+      // ACT 2 BOSS: Arch-Necromancer Malakor (Chamber 6)
+      this.isBoss = true;
+      this.isFlying = true;
+      this.body.setAllowGravity(false);
+      this.maxHp = Math.round(1550 * roomScale);
+      this.hp = this.maxHp;
+      this.speed = Math.round(80 * speedScale);
+      this.damage = Math.round(32 * dmgScale);
+      this.attackRange = 380;
+      this.setScale(1.8);
+      this.body.setSize(36, 46).setOffset(2, 2);
+      this.setTint(0x10b981); // Emerald Necrotic Fire
+      if (scene.anims.exists('sorcerer-idle')) this.anims.play('sorcerer-idle', true);
+      this.summonCooldown = 6.0;
+      this.soulVolleyCooldown = 3.5;
+      this.homeY = y;
+    } else if (type === 'cursed_king') {
+      // ACT 4 FINAL CLIMAX BOSS: The Cursed King Aldous & Void Primordial Heart (Chamber 12)
+      this.isBoss = true;
+      this.maxHp = Math.round(2800 * roomScale);
+      this.hp = this.maxHp;
+      this.speed = Math.round(105 * speedScale);
+      this.damage = Math.round(42 * dmgScale);
+      this.attackRange = 95;
+      this.setScale(2.0);
+      this.body.setSize(36, 52).setOffset(22, 6);
+      this.setTint(0xf59e0b); // Corrupted Crown Gold
+      if (scene.anims.exists('awakened-walk')) this.anims.play('awakened-walk', true);
+      this.kingSlashCooldown = 2.0;
+      this.kingNovaCooldown = 5.0;
+      this.kingTeleportCooldown = 4.0;
     }
 
     // State & Timers
@@ -152,6 +188,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.setTint(this.bossPhase === 2 ? 0xdc2626 : 0x334155);
     } else if (this.enemyType === 'belial') {
       this.setTint(this.bossPhase === 2 ? 0xef4444 : 0x7c3aed);
+    } else if (this.enemyType === 'malakor') {
+      this.setTint(this.bossPhase === 2 ? 0x059669 : 0x10b981);
+    } else if (this.enemyType === 'cursed_king') {
+      this.setTint(this.bossPhase === 2 ? 0xdc2626 : 0xf59e0b);
     } else if (this.isBoss) {
       this.setTint(this.bossPhase === 2 ? 0xff0044 : 0xef4444);
     } else if (this.enemyType === 'elite') {
@@ -353,6 +393,172 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
                 this.scene.spawnEnemyProjectile(targetX, 100, 0, this.damage * 0.7, 320, 0, 0x9333ea);
               }
             });
+          }
+        }
+        return;
+      }
+    }
+
+    // ==========================================
+    // BOSS: ARCH-NECROMANCER MALAKOR (Act 2, Chamber 6)
+    // ==========================================
+    if (this.enemyType === 'malakor') {
+      if (this.bossPhase === 1 && this.hp <= this.maxHp * 0.5) {
+        this.bossPhase = 2;
+        this.damage = Math.round(this.damage * 1.3);
+        this.setTint(0x059669);
+        this.scene.juice.addTrauma(0.85);
+        if (this.scene.cameras && this.scene.cameras.main) {
+          this.scene.cameras.main.flash(450, 16, 185, 129);
+        }
+        EventBus.emit('notification:show', {
+          text: '✦ MALAKOR EVOKES THE NECROTIC ECLIPSE! ✦',
+          color: '#34d399'
+        });
+        try { SoundSynth.playRoar(); } catch (e) {}
+
+        // Phase 2 Immediate Soul Nova Ring!
+        for (let i = 0; i < 8; i++) {
+          const angle = (i / 8) * Math.PI * 2;
+          const vx = Math.cos(angle) * 180;
+          const vy = Math.sin(angle) * 180;
+          this.scene.spawnEnemyProjectile(this.x, this.y, vx > 0 ? 1 : -1, this.damage * 0.6, Math.abs(vx), vy, 0x10b981);
+        }
+      }
+
+      this.summonCooldown -= dt;
+      this.soulVolleyCooldown -= dt;
+
+      // Hovering movement
+      const targetY = player.y - 65;
+      this.y += (targetY - this.y) * 0.05;
+      this.setVelocityX(dir * (dist > 150 ? this.speed : -this.speed * 0.6));
+
+      // Necrotic Soul Volley
+      if (this.soulVolleyCooldown <= 0 && this.state === 'CHASE') {
+        this.soulVolleyCooldown = this.bossPhase === 2 ? 3.0 : 4.5;
+        this.state = 'CASTING_VOLLEY';
+        this.telegraphTimer = 0.5;
+        this.setTint(0x34d399);
+        this.showTelegraphWarning();
+        return;
+      }
+
+      if (this.state === 'CASTING_VOLLEY') {
+        this.telegraphTimer -= dt;
+        if (this.telegraphTimer <= 0) {
+          this.restoreTint();
+          this.state = 'CHASE';
+          const volleys = this.bossPhase === 2 ? 4 : 3;
+          for (let i = 0; i < volleys; i++) {
+            this.scene.time.delayedCall(i * 140, () => {
+              if (this.active && !this.isDead && player.active) {
+                const angle = Phaser.Math.Angle.Between(this.x, this.y, player.x, player.y) + (Math.random() * 0.3 - 0.15);
+                const vx = Math.cos(angle) * 260;
+                const vy = Math.sin(angle) * 260;
+                this.scene.spawnEnemyProjectile(this.x, this.y, vx > 0 ? 1 : -1, this.damage * 0.7, Math.abs(vx), vy, 0x10b981);
+              }
+            });
+          }
+        }
+        return;
+      }
+
+      // Summon Skeleton Minion
+      if (this.summonCooldown <= 0 && this.state === 'CHASE' && this.scene.enemies.length < 8) {
+        this.summonCooldown = this.bossPhase === 2 ? 6.0 : 9.0;
+        const summonX = this.x + (Math.random() > 0.5 ? 120 : -120);
+        this.scene.juice.emitVoidEmbers(summonX, this.y, 20);
+        const minion = new Enemy(this.scene, summonX, this.y, 'skeleton');
+        this.scene.physics.add.collider(minion, this.scene.platforms);
+        this.scene.enemies.push(minion);
+        this.scene.enemyGroup.add(minion);
+        EventBus.emit('enemies:count', this.scene.enemies.length);
+        try { SoundSynth.playHit(); } catch (e) {}
+      }
+    }
+
+    // ==========================================
+    // FINAL CLIMAX BOSS: THE CURSED KING ALDOUS (Act 4, Chamber 12)
+    // ==========================================
+    if (this.enemyType === 'cursed_king') {
+      if (this.bossPhase === 1 && this.hp <= this.maxHp * 0.5) {
+        this.bossPhase = 2;
+        this.damage = Math.round(this.damage * 1.4);
+        this.speed = Math.round(this.speed * 1.35);
+        this.setTint(0xdc2626); // Primordial Void Heart Unleashed
+        this.scene.juice.addTrauma(1.0);
+        if (this.scene.cameras && this.scene.cameras.main) {
+          this.scene.cameras.main.flash(600, 220, 38, 38);
+        }
+        EventBus.emit('notification:show', {
+          text: '⚔️ THE PRIMORDIAL HEART AWAKENS: TOTAL COLLAPSE! ⚔️',
+          color: '#ef4444'
+        });
+        try { SoundSynth.playRoar(); } catch (e) {}
+
+        // Void Bullet Hell Spiral
+        for (let i = 0; i < 12; i++) {
+          const angle = (i / 12) * Math.PI * 2;
+          const vx = Math.cos(angle) * 220;
+          const vy = Math.sin(angle) * 220;
+          this.scene.spawnEnemyProjectile(this.x, this.y, vx > 0 ? 1 : -1, this.damage * 0.65, Math.abs(vx), vy, 0xef4444);
+        }
+      }
+
+      this.kingSlashCooldown -= dt;
+      this.kingNovaCooldown -= dt;
+      this.kingTeleportCooldown -= dt;
+
+      // Teleport Dash Strike behind Player
+      if (this.kingTeleportCooldown <= 0 && this.state === 'CHASE' && dist > 140) {
+        this.kingTeleportCooldown = this.bossPhase === 2 ? 4.0 : 6.5;
+        this.state = 'TELEPORT_STRIKE';
+        this.telegraphTimer = 0.45;
+        this.setTint(0xfacc15);
+        this.showTelegraphWarning();
+        this.scene.juice.emitVoidEmbers(this.x, this.y, 24);
+        return;
+      }
+
+      if (this.state === 'TELEPORT_STRIKE') {
+        this.telegraphTimer -= dt;
+        if (this.telegraphTimer <= 0) {
+          this.restoreTint();
+          this.state = 'CHASE';
+          // Teleport behind player!
+          const teleportOffset = player.facing * -90;
+          this.x = Phaser.Math.Clamp(player.x + teleportOffset, 120, this.scene.worldWidth - 120);
+          this.y = player.y;
+          this.scene.juice.emitVoidEmbers(this.x, this.y, 30);
+          this.setVelocity(player.facing * 220, 0);
+          if (dist < 100) {
+            player.takeDamage(this.damage, this.x);
+          }
+        }
+        return;
+      }
+
+      // Ground Void Shockwave Slash
+      if (this.kingSlashCooldown <= 0 && this.state === 'CHASE' && dist < 120 && onFloor) {
+        this.kingSlashCooldown = this.bossPhase === 2 ? 2.2 : 3.5;
+        this.state = 'KING_SLASH';
+        this.telegraphTimer = 0.4;
+        this.setTint(0xf87171);
+        this.showTelegraphWarning();
+        return;
+      }
+
+      if (this.state === 'KING_SLASH') {
+        this.telegraphTimer -= dt;
+        if (this.telegraphTimer <= 0) {
+          this.restoreTint();
+          this.state = 'CHASE';
+          // Shockwaves left and right!
+          this.scene.spawnEnemyProjectile(this.x, this.y, dir, this.damage * 0.8, 280, 0, 0xef4444);
+          this.scene.spawnEnemyProjectile(this.x, this.y, -dir, this.damage * 0.8, 280, 0, 0xef4444);
+          if (typeof this.scene.triggerEnemySlamShockwave === 'function') {
+            this.scene.triggerEnemySlamShockwave(this.x, this.y, 140, this.damage);
           }
         }
         return;
@@ -793,8 +999,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
     // Blood Quartz drop for MetaProgression
     let quartzDrop = 0;
-    if (this.enemyType === 'belial') {
+    if (this.enemyType === 'cursed_king') {
+      quartzDrop = 100;
+    } else if (this.enemyType === 'belial') {
       quartzDrop = 60;
+    } else if (this.enemyType === 'malakor') {
+      quartzDrop = 50;
     } else if (this.enemyType === 'general_vane') {
       quartzDrop = 40;
     } else if (this.isBoss) {
