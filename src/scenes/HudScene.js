@@ -160,7 +160,11 @@ export class HudScene extends Phaser.Scene {
     this.progressFill.width = this.progressTrackW * ratio;
     this.progressCursor.x = this.progressTrackX + this.progressTrackW * ratio;
     const displayZone = zoneName ? zoneName.toUpperCase() : 'EXPEDITION';
-    this.progressLabel.setText(`${displayZone}: ${currentX}m / ${maxX}m`);
+    const newText = `${displayZone}: ${currentX}m / ${maxX}m`;
+    if (this._lastProgressText !== newText) {
+      this._lastProgressText = newText;
+      this.progressLabel.setText(newText);
+    }
   }
 
   showZoneBanner(zoneName) {

@@ -83,14 +83,14 @@ export class DungeonScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, WORLD_W, WORLD_H);
     this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
 
-    // 4. Parallax Backgrounds across World
+    // 4. Ultra-Fast Viewport-Clipped Parallax Backgrounds (Eliminates GPU fill-rate lag)
     if (this.textures.exists('bg-gothic')) {
-      this.bgBack = this.add.tileSprite(0, 0, WORLD_W, WORLD_H, 'bg-gothic').setOrigin(0, 0).setScrollFactor(0.08);
-      this.bgBack.setScale(2.5, 2.5);
+      this.bgBack = this.add.tileSprite(0, 0, 960, 540, 'bg-gothic').setOrigin(0, 0).setScrollFactor(0);
+      this.bgBack.setScale(1.8, 1.8);
     }
     if (this.textures.exists('bg-columns')) {
-      this.bgColumns = this.add.tileSprite(0, 0, WORLD_W, WORLD_H, 'bg-columns').setOrigin(0, 0).setScrollFactor(0.28).setAlpha(0.75);
-      this.bgColumns.setScale(2.0, 2.0);
+      this.bgColumns = this.add.tileSprite(0, 0, 960, 540, 'bg-columns').setOrigin(0, 0).setScrollFactor(0).setAlpha(0.75);
+      this.bgColumns.setScale(1.5, 1.5);
     }
 
     // 4b. Atmospheric Cathedral Dust Motes (Adds gothic depth to upper ceiling)
@@ -314,17 +314,29 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   buildBossArena(worldW, worldH) {
-    // 1. Solid Ground across Boss Arena
+    // 1. Visual tiles (no physics bodies on individual tiles)
     for (let x = 0; x < worldW; x += 32) {
-      const tile = this.platforms.create(x + 16, 560, 'tile_floor');
-      tile.refreshBody();
+      this.add.image(x + 16, 560, 'tile_floor').setDepth(2);
+      this.add.image(x + 16, 592, 'tile_foundation').setDepth(2);
     }
+    // Single unified continuous floor collider
+    const floorCollider = this.platforms.create(worldW / 2, 560, 'tile_floor');
+    floorCollider.setVisible(false);
+    floorCollider.setDisplaySize(worldW, 32);
+    floorCollider.refreshBody();
+    floorCollider.body.checkCollision.left = false;
+    floorCollider.body.checkCollision.right = false;
 
-    // Outer Boundaries
-    for (let y = 0; y < worldH; y += 32) {
-      this.platforms.create(0, y, 'tile_floor').refreshBody();
-      this.platforms.create(worldW, y, 'tile_floor').refreshBody();
-    }
+    // Outer Boundaries (2 colliders instead of 80!)
+    const leftBound = this.platforms.create(-16, worldH / 2, 'tile_floor');
+    leftBound.setVisible(false);
+    leftBound.setDisplaySize(32, worldH);
+    leftBound.refreshBody();
+
+    const rightBound = this.platforms.create(worldW + 16, worldH / 2, 'tile_floor');
+    rightBound.setVisible(false);
+    rightBound.setDisplaySize(32, worldH);
+    rightBound.refreshBody();
 
     // Boss Arena Tactical Platforms
     this.createPlatformSlab(420, 440, 5);
@@ -356,19 +368,29 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   buildShopChamber(worldW, worldH) {
-    // Solid floor across the shop sanctuary
+    // 1. Visual tiles
     for (let x = 0; x < worldW; x += 32) {
-      const tile = this.platforms.create(x + 16, 560, 'tile_floor');
-      tile.refreshBody();
-      const f1 = this.platforms.create(x + 16, 592, 'tile_foundation');
-      f1.refreshBody();
+      this.add.image(x + 16, 560, 'tile_floor').setDepth(2);
+      this.add.image(x + 16, 592, 'tile_foundation').setDepth(2);
     }
+    // Single unified continuous floor collider
+    const floorCollider = this.platforms.create(worldW / 2, 560, 'tile_floor');
+    floorCollider.setVisible(false);
+    floorCollider.setDisplaySize(worldW, 32);
+    floorCollider.refreshBody();
+    floorCollider.body.checkCollision.left = false;
+    floorCollider.body.checkCollision.right = false;
 
-    // Outer Boundaries
-    for (let y = 0; y < worldH; y += 32) {
-      this.platforms.create(0, y, 'tile_floor').refreshBody();
-      this.platforms.create(worldW, y, 'tile_floor').refreshBody();
-    }
+    // Outer Boundaries (2 colliders)
+    const leftBound = this.platforms.create(-16, worldH / 2, 'tile_floor');
+    leftBound.setVisible(false);
+    leftBound.setDisplaySize(32, worldH);
+    leftBound.refreshBody();
+
+    const rightBound = this.platforms.create(worldW + 16, worldH / 2, 'tile_floor');
+    rightBound.setVisible(false);
+    rightBound.setDisplaySize(32, worldH);
+    rightBound.refreshBody();
 
     // The Hooded Collector Market Stall
     if (this.textures.exists('prop_market_stall')) {
@@ -489,58 +511,62 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   buildExpansiveLevelGeometry(worldW, worldH) {
-    // 1. Solid Deep Floor Segments with Subterranean Foundation Masonry
+    // 1. Continuous Seam-Free Floor Segments (Unified Colliders: 100% fixes horizontal snagging/stuck bugs!)
     const buildFloorSegment = (startX, endX) => {
+      // Visual masonry tiles (Pure visual images, ZERO physics overhead!)
       for (let x = startX; x < endX; x += 32) {
-        // Paver surface
-        const tile = this.platforms.create(x + 16, 560, 'tile_floor');
-        tile.refreshBody();
-        // Deep castle foundation blocks beneath floor (prevents thin floating look)
-        const f1 = this.platforms.create(x + 16, 592, 'tile_foundation');
-        f1.refreshBody();
-        const f2 = this.platforms.create(x + 16, 624, 'tile_foundation');
-        f2.refreshBody();
+        this.add.image(x + 16, 560, 'tile_floor').setDepth(2);
+        this.add.image(x + 16, 592, 'tile_foundation').setDepth(2);
+        this.add.image(x + 16, 624, 'tile_foundation').setDepth(2);
+      }
+      // Single continuous physics collider for the entire floor segment
+      const segW = endX - startX;
+      if (segW > 0) {
+        const floorCollider = this.platforms.create(startX + segW / 2, 560, 'tile_floor');
+        floorCollider.setVisible(false);
+        floorCollider.setDisplaySize(segW, 32);
+        floorCollider.refreshBody();
+        floorCollider.body.checkCollision.left = false;
+        floorCollider.body.checkCollision.right = false;
       }
     };
 
     // Helper to build a proper deep chasm with vertical stone walls, visual pit floor, and lethal spikes
     const buildDeepChasm = (startX, endX) => {
-      // Left vertical cliff wall (at startX - 16, where floor drops off)
-      const leftCorner = this.platforms.create(startX - 16, 560, 'tile_cliff_corner_left');
-      leftCorner.refreshBody();
-      const leftWall1 = this.platforms.create(startX - 16, 592, 'tile_cliff_left');
-      leftWall1.refreshBody();
-      const leftWall2 = this.platforms.create(startX - 16, 624, 'tile_cliff_left');
-      leftWall2.refreshBody();
+      // Visual cliff corners and walls
+      this.add.image(startX - 16, 560, 'tile_cliff_corner_left').setDepth(2);
+      this.add.image(startX - 16, 592, 'tile_cliff_left').setDepth(2);
+      this.add.image(startX - 16, 624, 'tile_cliff_left').setDepth(2);
 
-      // Right vertical cliff wall (at endX + 16, where floor begins)
-      const rightCorner = this.platforms.create(endX + 16, 560, 'tile_cliff_corner_right');
-      rightCorner.refreshBody();
-      const rightWall1 = this.platforms.create(endX + 16, 592, 'tile_cliff_right');
-      rightWall1.refreshBody();
-      const rightWall2 = this.platforms.create(endX + 16, 624, 'tile_cliff_right');
-      rightWall2.refreshBody();
+      this.add.image(endX + 16, 560, 'tile_cliff_corner_right').setDepth(2);
+      this.add.image(endX + 16, 592, 'tile_cliff_right').setDepth(2);
+      this.add.image(endX + 16, 624, 'tile_cliff_right').setDepth(2);
 
-      // Visual stone plinth at bottom (NO solid physics body, so falling enemies plunge into spikes!)
+      // Single vertical left wall collider
+      const leftWall = this.platforms.create(startX - 16, 592, 'tile_cliff_left');
+      leftWall.setVisible(false);
+      leftWall.setDisplaySize(32, 96);
+      leftWall.refreshBody();
+
+      // Single vertical right wall collider
+      const rightWall = this.platforms.create(endX + 16, 592, 'tile_cliff_right');
+      rightWall.setVisible(false);
+      rightWall.setDisplaySize(32, 96);
+      rightWall.refreshBody();
+
+      // Visual stone plinth and spikes
       for (let px = startX + 16; px <= endX - 16; px += 32) {
         this.add.image(px, 624, 'tile_foundation').setDepth(1);
-        const spike = this.hazards.create(px, 608, 'hazard_spikes');
-        spike.body.setSize(32, 20).setOffset(0, 4);
-        spike.refreshBody();
-
-        // Creeping subterranean blood mist in the pit
-        if (px % 64 === 16) {
-          const mist = this.add.image(px, 580, 'mist_fog').setDepth(2).setAlpha(0.5);
-          this.tweens.add({
-            targets: mist,
-            alpha: { from: 0.3, to: 0.65 },
-            x: px + 12,
-            duration: 2200 + Math.random() * 800,
-            yoyo: true,
-            repeat: -1
-          });
-        }
+        this.add.image(px, 608, 'hazard_spikes').setDepth(2);
       }
+
+      // Single continuous hazard spike collider across the entire pit floor
+      const pitW = (endX - 16) - (startX + 16) + 32;
+      const pitMidX = (startX + endX) / 2;
+      const pitSpike = this.hazards.create(pitMidX, 612, 'hazard_spikes');
+      pitSpike.setVisible(false);
+      pitSpike.setDisplaySize(pitW, 24);
+      pitSpike.refreshBody();
     };
 
     // =========================================================================
@@ -575,17 +601,22 @@ export class DungeonScene extends Phaser.Scene {
     // Floor 5 (Zone 5: The Gates of Destiny Grand Terrace): x: 4992 - worldW
     buildFloorSegment(4992, worldW);
 
-    // Outer Boundaries
-    for (let y = 0; y < worldH; y += 32) {
-      this.platforms.create(0, y, 'tile_floor').refreshBody();
-      this.platforms.create(worldW, y, 'tile_floor').refreshBody();
-    }
+    // Outer Boundaries (2 unified colliders instead of 90 separate bodies!)
+    const leftBound = this.platforms.create(-16, worldH / 2, 'tile_floor');
+    leftBound.setVisible(false);
+    leftBound.setDisplaySize(32, worldH);
+    leftBound.refreshBody();
 
-    // Safety Floor at very bottom to catch any deep falls
-    for (let x = 0; x < worldW; x += 64) {
-      const bTile = this.platforms.create(x + 32, 650, 'tile_foundation');
-      bTile.setVisible(false).refreshBody();
-    }
+    const rightBound = this.platforms.create(worldW + 16, worldH / 2, 'tile_floor');
+    rightBound.setVisible(false);
+    rightBound.setDisplaySize(32, worldH);
+    rightBound.refreshBody();
+
+    // Safety Floor at very bottom (1 unified collider instead of 88!)
+    const safetyFloor = this.platforms.create(worldW / 2, 650, 'tile_foundation');
+    safetyFloor.setVisible(false);
+    safetyFloor.setDisplaySize(worldW, 40);
+    safetyFloor.refreshBody();
 
     // -------------------------------------------------------------------------
     // ZONE 1: THE FORSAKEN CATHEDRAL NAVE (x: 0 - 1088)
@@ -706,9 +737,9 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   createPlatformSlab(startX, y, count) {
+    const slabW = count * 32;
     for (let i = 0; i < count; i++) {
-      const tile = this.platforms.create(startX + i * 32, y, 'tile_platform');
-      tile.refreshBody();
+      this.add.image(startX + i * 32, y, 'tile_platform').setDepth(2);
     }
 
     // Carved stone corbel brackets underneath both ends for authentic gothic structural support
@@ -726,13 +757,28 @@ export class DungeonScene extends Phaser.Scene {
         }
       }
     }
+
+    // Single unified platform collider with smooth one-way top collision (Zero seam catching!)
+    const midX = startX + (count - 1) * 16;
+    const slab = this.platforms.create(midX, y, 'tile_platform');
+    slab.setVisible(false);
+    slab.setDisplaySize(slabW, 20);
+    slab.refreshBody();
+    slab.body.checkCollision.down = false;
+    slab.body.checkCollision.left = false;
+    slab.body.checkCollision.right = false;
   }
 
   createHazardSpikes(startX, y, count) {
+    const totalW = count * 32;
     for (let i = 0; i < count; i++) {
-      const spike = this.hazards.create(startX + i * 32, y, 'hazard_spikes');
-      spike.refreshBody();
+      this.add.image(startX + i * 32, y, 'hazard_spikes').setDepth(2);
     }
+    const midX = startX + (count - 1) * 16;
+    const spike = this.hazards.create(midX, y, 'hazard_spikes');
+    spike.setVisible(false);
+    spike.setDisplaySize(totalW, 20);
+    spike.refreshBody();
   }
 
   createTorch(x, y) {
@@ -1025,6 +1071,14 @@ export class DungeonScene extends Phaser.Scene {
     const dt = delta / 1000;
     this.juice.update(dt);
 
+    // Fast Parallax Scroll (Fixed viewport quads, zero fill-rate overhead)
+    if (this.bgBack && this.cameras && this.cameras.main) {
+      this.bgBack.tilePositionX = this.cameras.main.scrollX * 0.08;
+    }
+    if (this.bgColumns && this.cameras && this.cameras.main) {
+      this.bgColumns.tilePositionX = this.cameras.main.scrollX * 0.28;
+    }
+
     // Update Player & fail-safe pit rescue bounds
     if (this.player && this.player.active && !this.player.isDead) {
       this.player.update(time, delta);
@@ -1034,7 +1088,7 @@ export class DungeonScene extends Phaser.Scene {
         this.player.setVelocity(0, -120);
       }
 
-      // Real-time Expedition Distance & Zone Tracking
+      // Real-time Expedition Distance & Zone Tracking (Throttled to prevent canvas font re-rasterization)
       const playerX = Math.round(this.player.x);
       let currentZone = 'Cathedral Nave';
       if (playerX >= 4900) currentZone = 'Gates of Destiny';
@@ -1046,11 +1100,15 @@ export class DungeonScene extends Phaser.Scene {
         this.lastZone = currentZone;
         EventBus.emit('zone:entered', currentZone);
       }
-      EventBus.emit('player:progress', {
-        currentX: playerX,
-        maxX: this.worldWidth,
-        zone: currentZone
-      });
+
+      if (this.lastReportedProgressX === undefined || Math.abs(playerX - this.lastReportedProgressX) >= 15) {
+        this.lastReportedProgressX = playerX;
+        EventBus.emit('player:progress', {
+          currentX: playerX,
+          maxX: this.worldWidth,
+          zone: currentZone
+        });
+      }
     }
 
     // Prune dead/inactive enemies to guarantee room clearance never deadlocks
@@ -1059,10 +1117,15 @@ export class DungeonScene extends Phaser.Scene {
       this.onRoomCleared();
     }
 
-    // Update Enemies
+    // Update Enemies with Viewport Distance Culling (Far-away enemies sleep to save CPU & physics cycles)
+    const pX = (this.player && this.player.active) ? this.player.x : 0;
     for (const enemy of this.enemies) {
       if (enemy && enemy.active && enemy.body && !enemy.isDead) {
-        enemy.update(time, delta, this.player);
+        if (Math.abs(enemy.x - pX) < 960) {
+          enemy.update(time, delta, this.player);
+        } else {
+          if (enemy.body.velocity.x !== 0) enemy.setVelocityX(0);
+        }
       }
     }
 

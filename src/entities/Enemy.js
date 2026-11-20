@@ -211,13 +211,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
     const dt = delta / 1000;
 
-    // Direct Spike Hazard Overlap Protection: enemies in spikes take fatal damage immediately
-    if (this.y > 575 && this.scene && this.scene.hazards) {
-      if (this.scene.physics.overlap(this, this.scene.hazards)) {
-        this.scene.juice.emitBlood(this.x, this.y, 24);
-        this.die();
-        return;
-      }
+    // Fail-safe pit bottom death (physics group overlap in DungeonScene handles spikes automatically)
+    if (this.y > 620) {
+      this.die();
+      return;
     }
 
     // Keep grounded drop shadow aligned with enemy feet

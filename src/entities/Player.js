@@ -24,10 +24,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.body.setSize(26, 50).setOffset(28, 10);
     this.setCollideWorldBounds(true);
 
-    // Movement & Facing
-    this.speed = 190 + (metaBonuses.speedBonus || 0);
+    // Movement & Facing (Tuned for responsive, snappy, agile feel)
+    this.speed = 240 + (metaBonuses.speedBonus || 0);
     this.facing = 1; // 1: facing right, -1: facing left
-    this.jumpVelocity = -415; // Tuned for single-jump clearance of 90px platforms
+    this.jumpVelocity = -445; // Tuned for fluid platform clearance
     this.isDead = false;
 
     // Consumable Potions ([F] Key)
@@ -54,7 +54,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.isDashing = false;
     this.dashTimer = 0;
     this.dashCooldown = 0;
-    this.baseDashCooldown = Math.max(0.35, 0.65 * (metaBonuses.dashCooldownMult || 1.0));
+    this.baseDashCooldown = Math.max(0.32, 0.48 * (metaBonuses.dashCooldownMult || 1.0));
     this.isParrying = false;
     this.parryTimer = 0;
     this.parryCooldown = 0;
@@ -189,20 +189,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.potionCooldown > 0) this.potionCooldown -= dt;
     if (this.swapCooldown > 0) {
       this.swapCooldown -= dt;
-      EventBus.emit('swap:cooldown', { current: Math.max(0, this.swapCooldown), max: 6.0 });
+      if (!this._lastSwapEmit || (this._lastSwapEmit - this.swapCooldown) > 0.1 || this.swapCooldown <= 0) {
+        this._lastSwapEmit = this.swapCooldown;
+        EventBus.emit('swap:cooldown', { current: Math.max(0, this.swapCooldown), max: 6.0 });
+      }
     }
     if (this.comboTimer > 0) {
       this.comboTimer -= dt;
       if (this.comboTimer <= 0) this.comboStep = 0;
-    }
-
-    // Ambient Form Particles (subtle visual indicator of active skull form)
-    if (this.active && !this.isDead && Math.random() > 0.82) {
-      if (this.isBeast) {
-        this.scene.juice.emitVoidEmbers(this.x + (Math.random() * 16 - 8), this.y + 10, 1);
-      } else {
-        this.scene.juice.emitHolySparks(this.x + (Math.random() * 16 - 8), this.y + 12, 1);
-      }
     }
 
     // Ground check & Coyote Time

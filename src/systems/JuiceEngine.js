@@ -123,8 +123,9 @@ export class JuiceEngine {
     });
   }
 
-  // Burst Particles
-  emitBlood(x, y, count = 12) {
+  // Burst Particles (Optimized batch counts to avoid GC spikes)
+  emitBlood(x, y, count = 6) {
+    count = Math.min(count, 10);
     for (let i = 0; i < count; i++) {
       const part = this.scene.add.image(x, y, 'part_blood');
       const angle = Math.random() * Math.PI * 2;
@@ -145,7 +146,8 @@ export class JuiceEngine {
     }
   }
 
-  emitSparks(x, y, count = 10) {
+  emitSparks(x, y, count = 5) {
+    count = Math.min(count, 8);
     for (let i = 0; i < count; i++) {
       const part = this.scene.add.image(x, y, 'part_spark');
       const angle = Math.random() * Math.PI * 2;
@@ -163,7 +165,8 @@ export class JuiceEngine {
     }
   }
 
-  emitVoidEmbers(x, y, count = 14) {
+  emitVoidEmbers(x, y, count = 6) {
+    count = Math.min(count, 10);
     for (let i = 0; i < count; i++) {
       const part = this.scene.add.image(x, y, 'part_void');
       const angle = Math.random() * Math.PI * 2;
@@ -182,7 +185,8 @@ export class JuiceEngine {
     }
   }
 
-  emitHolySparks(x, y, count = 10) {
+  emitHolySparks(x, y, count = 5) {
+    count = Math.min(count, 8);
     for (let i = 0; i < count; i++) {
       const key = (i % 2 === 0) ? 'part_sunfire' : 'part_spark';
       const part = this.scene.add.image(x, y, key);
