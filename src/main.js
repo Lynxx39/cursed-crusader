@@ -34,6 +34,10 @@ const config = {
 };
 
 const game = new Phaser.Game(config);
-window.game = game;
+
+// Guard against external browser extensions automatically toggling debug overlays
+if (import.meta.env && import.meta.env.DEV) {
+  window.__GAME_DEV__ = game;
+}
 
 export default game;

@@ -42,10 +42,33 @@ export class DungeonScene extends Phaser.Scene {
     this.cameras.main.resetFX();
     this.cameras.main.fadeIn(400, 10, 12, 16);
 
-    // Ensure physics world is completely active & resumed
+    // Ensure physics world is completely active & debug overlay is strictly disabled by default
     if (this.physics && this.physics.world) {
       this.physics.world.resume();
+      this.physics.world.drawDebug = false;
+      if (this.physics.world.debugGraphic) {
+        this.physics.world.debugGraphic.clear();
+        this.physics.world.debugGraphic.setVisible(false);
+      }
     }
+
+    // F1 toggle key for optional hitbox inspection (defaults to OFF)
+    this.input.keyboard.on('keydown-F1', () => {
+      if (this.physics && this.physics.world) {
+        const next = !this.physics.world.drawDebug;
+        this.physics.world.drawDebug = next;
+        if (!next && this.physics.world.debugGraphic) {
+          this.physics.world.debugGraphic.clear();
+          this.physics.world.debugGraphic.setVisible(false);
+        } else if (next) {
+          if (!this.physics.world.debugGraphic) {
+            this.physics.world.createDebugGraphic();
+          } else {
+            this.physics.world.debugGraphic.setVisible(true);
+          }
+        }
+      }
+    });
 
     // 2. Initialize Juice
     this.juice = new JuiceEngine(this);
