@@ -9,10 +9,46 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload() {
-    // 1. Loading Text
-    const loadingText = this.add.text(480, 270, 'SUMMONING GOTHIC FORCES...', {
-      fontFamily: 'monospace', fontSize: '18px', fontStyle: 'bold', color: '#ef4444'
+    // Remove HTML initial loading screen once Phaser boot is active
+    try {
+      const initialLoading = document.getElementById('initial-loading');
+      if (initialLoading) initialLoading.remove();
+    } catch (e) {}
+
+    const { width, height } = this.scale;
+
+    // 1. Loading Text & Progress Bar
+    const loadingText = this.add.text(width / 2, height / 2 - 12, 'SUMMONING GOTHIC FORCES... 0%', {
+      fontFamily: 'Cinzel, monospace', fontSize: '15px', fontStyle: 'bold', color: '#f87171'
     }).setOrigin(0.5);
+
+    const progressBox = this.add.graphics();
+    const progressBar = this.add.graphics();
+    progressBox.fillStyle(0x0f172a, 0.85);
+    progressBox.fillRect(width / 2 - 160, height / 2 + 16, 320, 14);
+    progressBox.lineStyle(1, 0x7c3aed, 1);
+    progressBox.strokeRect(width / 2 - 160, height / 2 + 16, 320, 14);
+
+    this.load.on('progress', (val) => {
+      progressBar.clear();
+      progressBar.fillStyle(0xdc2626, 1);
+      progressBar.fillRect(width / 2 - 158, height / 2 + 18, 316 * val, 10);
+      loadingText.setText(`SUMMONING GOTHIC FORCES... ${Math.round(val * 100)}%`);
+    });
+
+    this.load.on('complete', () => {
+      progressBar.destroy();
+      progressBox.destroy();
+      loadingText.destroy();
+    });
+
+    // Safety timeout: transition smoothly if asset network delays
+    this.time.delayedCall(4500, () => {
+      if (this.scene.isActive('boot')) {
+        console.warn('BootScene timeout reached, starting main menu');
+        this.scene.start('main-menu');
+      }
+    });
 
     // 2. Preload Gothicvania Spritesheets (Ansimuz itch.io collection)
     this.load.spritesheet('player', 'assets/spritesheets/player.png', {
@@ -101,6 +137,11 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
+    try {
+      const initialLoading = document.getElementById('initial-loading');
+      if (initialLoading) initialLoading.remove();
+    } catch (e) {}
+
     // 1. Generate complementary procedural canvas textures (gates, relics, pickups, slashes)
     SpriteFactory.generateAll(this);
 
