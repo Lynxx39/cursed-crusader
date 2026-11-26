@@ -31,6 +31,7 @@ export class BootScene extends Phaser.Scene {
       scheduleFallback();
     });
 
+    this.bootCompleted = false;
     this.load.on('complete', () => {
       if (this.bootTimeout) {
         clearTimeout(this.bootTimeout);
@@ -41,16 +42,17 @@ export class BootScene extends Phaser.Scene {
       loadingText.destroy();
     });
 
-    // Inactivity safety fallback: only fires if loading stalls for 8s without progress
+    // Inactivity safety fallback: only fires if loading genuinely stalls for 18s without progress
     const scheduleFallback = () => {
       if (this.bootTimeout) clearTimeout(this.bootTimeout);
       this.bootTimeout = setTimeout(() => {
+        if (this.bootCompleted) return;
         console.warn('BootScene stall timeout reached, forcing transition to main menu');
         try {
           const initialLoading = document.getElementById('initial-loading');
           if (initialLoading) initialLoading.remove();
         } catch (e) {}
-        if (this.scene && this.scene.isActive('boot')) {
+        if (this.scene) {
           try {
             SpriteFactory.generateAll(this);
             SoundSynth.init();
@@ -58,7 +60,7 @@ export class BootScene extends Phaser.Scene {
           } catch (e) {}
           this.scene.start('main-menu');
         }
-      }, 8000);
+      }, 18000);
     };
     scheduleFallback();
 
@@ -178,6 +180,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
+    this.bootCompleted = true;
     if (this.bootTimeout) {
       clearTimeout(this.bootTimeout);
       this.bootTimeout = null;
