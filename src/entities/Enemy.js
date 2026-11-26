@@ -332,9 +332,6 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         const pulse = 1.0 + Math.sin(time * 0.03) * 0.25;
         this.parryGlint.setPosition(this.x + wDir * 22, this.y - 14).setScale(pulse);
       }
-      if (this.windupWarnBox && this.windupWarnBox.scene) {
-        this.windupWarnBox.setPosition(this.x + wDir * ((this.attackRange + 16) * 0.5), this.y + 8);
-      }
 
       // Responsive Parry detection right during golden glint windup!
       if (player.isParrying && Math.abs(player.x - this.x) < 95 && Math.abs(player.y - this.y) < 68) {
@@ -1032,14 +1029,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.anims.play('skeleton-attack', true);
     }
 
-    const reach = Math.min(130, this.attackRange + 16);
     if (this.scene && this.scene.textures && this.scene.textures.exists('fx_parry_glint')) {
       this.parryGlint = this.scene.add.image(this.x + dir * 22, this.y - 14, 'fx_parry_glint')
-        .setDepth(26).setScale(1.1);
-    }
-    if (this.scene && this.scene.add) {
-      this.windupWarnBox = this.scene.add.rectangle(this.x + dir * (reach * 0.5), this.y + 8, reach, 26, 0xef4444, 0.22)
-        .setStrokeStyle(1, 0xfbbf24, 0.85).setDepth(18);
+        .setDepth(26).setScale(1.2);
     }
   }
 

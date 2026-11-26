@@ -325,6 +325,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     let moveSpeed = this.speed;
     if (this.isAwakened) moveSpeed *= 1.2;
+    else if (this.isBeast) moveSpeed *= 1.12;
     if (this.isBeast && this.beastType === 'feral') moveSpeed *= 1.6;
     if (this.isBeast && this.beastType === 'gargoyle') moveSpeed *= 0.85;
     if (this.frenzyTimer > 0) {
@@ -457,6 +458,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.isBeast = (this.activeForm === 'berserker');
     this.beastType = this.isBeast ? 'abyssal' : null;
     this.setTexture(this.isBeast ? 'player-awakened' : 'player');
+    if (this.isBeast) this.setTint(0xd8b4fe);
+    else this.clearTint();
     if (this.anims) {
       const targetAnim = this.isBeast ? 'awakened-idle' : 'player-idle';
       if (this.scene.anims.exists(targetAnim)) this.anims.play(targetAnim, true);
@@ -808,6 +811,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     this.scene.tweens.killTweensOf(this.slashSprite);
     this.slashSprite.setTexture('slash_knight')
+      .clearTint()
       .setPosition(hitboxX, hitboxY)
       .setFlipX(dir < 0)
       .setScale(1)
@@ -866,6 +870,27 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     SoundSynth.playRoar();
     SoundSynth.playSlash(this.comboStep);
+
+    // Wide crimson/abyssal slash crescent visually distinct from Knight's steel arc
+    this.scene.tweens.killTweensOf(this.slashSprite);
+    this.slashSprite.setTexture('slash_knight')
+      .setTint(this.isAwakened ? 0xef4444 : 0xc084fc)
+      .setPosition(hitboxX, hitboxY)
+      .setFlipX(dir < 0)
+      .setScale(this.isAwakened ? 1.55 : 1.3)
+      .setVisible(true)
+      .setAlpha(1);
+    this.scene.tweens.add({
+      targets: this.slashSprite,
+      alpha: 0,
+      scaleX: this.isAwakened ? 1.8 : 1.5,
+      duration: 150,
+      onComplete: () => {
+        if (this.slashSprite && this.slashSprite.scene) {
+          this.slashSprite.setVisible(false);
+        }
+      }
+    });
 
     const awakenDmgMult = this.isAwakened ? 1.45 : 1.0;
 
@@ -1016,6 +1041,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.anims.stop();
     }
     this.setTexture(this.isBeast ? 'player-awakened' : 'player');
+    if (this.isBeast) this.setTint(0xd8b4fe);
+    else this.clearTint();
     const idleKey = this.isBeast ? 'awakened-idle' : 'player-idle';
     if (this.scene.anims.exists(idleKey)) {
       this.anims.play(idleKey);
@@ -1065,7 +1092,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     this.setTint(0xff0000);
     this.scene.time.delayedCall(100, () => {
-      if (this.active && !this.isDead) this.clearTint();
+      if (this.active && !this.isDead) {
+        if (this.isAwakened) this.setTint(0xfca5a5);
+        else if (this.isBeast) this.setTint(0xd8b4fe);
+        else this.clearTint();
+      }
     });
 
     EventBus.emit('player:hp_changed', { current: this.hp, max: this.maxHp });

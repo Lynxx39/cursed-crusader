@@ -1524,20 +1524,20 @@ export class DungeonScene extends Phaser.Scene {
       SoundSynth.playRoar();
     } catch (e) { }
 
-    // Visible crimson-amber ground shockwave surges rushing left & right
+    // Visible crimson-amber pixel slash waves rushing left & right along the floor
     [-1, 1].forEach((dir) => {
-      const wave = this.add.rectangle(sourceX + dir * 10, sourceY - 6, 20, 10, 0xef4444, 0.9)
-        .setStrokeStyle(1.5, 0xfbbf24).setDepth(22);
-      this.tweens.add({
-        targets: wave,
-        x: sourceX + dir * radius,
-        scaleX: 1.8,
-        scaleY: 0.4,
-        alpha: 0,
-        duration: 240,
-        ease: 'Cubic.easeOut',
-        onComplete: () => wave.destroy()
-      });
+      if (this.textures.exists('fx_enemy_slash')) {
+        const wave = this.add.image(sourceX + dir * 12, sourceY - 10, 'fx_enemy_slash')
+          .setFlipX(dir < 0).setScale(0.95, 0.65).setDepth(22);
+        this.tweens.add({
+          targets: wave,
+          x: sourceX + dir * radius,
+          alpha: 0,
+          duration: 240,
+          ease: 'Cubic.easeOut',
+          onComplete: () => wave.destroy()
+        });
+      }
     });
 
     // Check player collision with ground shockwave
