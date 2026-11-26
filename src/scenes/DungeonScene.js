@@ -95,6 +95,14 @@ export class DungeonScene extends Phaser.Scene {
     this.bgGraveyard = null;
     this.bgColumns = null;
 
+    const lazyBiomeMap = {
+      5: ['bg-black-lab', 'assets/backgrounds/bg_black_lab.png'],
+      6: ['bg-black-lab', 'assets/backgrounds/bg_black_lab.png'],
+      7: ['bg-fortress', 'assets/backgrounds/bg_fortress.png'],
+      8: ['bg-fortress', 'assets/backgrounds/bg_fortress.png'],
+      10: ['bg-sacred-grounds', 'assets/backgrounds/bg_sacred_grounds.png'],
+      11: ['bg-sacred-grounds', 'assets/backgrounds/bg_sacred_grounds.png']
+    };
     if (room === 1 && this.textures.exists('bg-forest')) {
       this.bgBack = this.add.tileSprite(0, 0, 960, 540, 'bg-forest').setOrigin(0, 0).setScrollFactor(0);
     } else if ((room === 5 || room === 6) && this.textures.exists('bg-black-lab')) {
@@ -110,6 +118,16 @@ export class DungeonScene extends Phaser.Scene {
     } else if (this.textures.exists('bg-gothic')) {
       this.bgBack = this.add.tileSprite(0, 0, 400, 224, 'bg-gothic').setOrigin(0, 0).setScrollFactor(0).setScale(2.42);
       if (room === 4) this.bgBack.setTint(0x6ee7b7).setAlpha(0.55);
+      if (lazyBiomeMap[room]) {
+        const [bKey, bPath] = lazyBiomeMap[room];
+        this.load.image(bKey, bPath);
+        this.load.once(`filecomplete-image-${bKey}`, () => {
+          if (this.bgBack && this.bgBack.scene && this.textures.exists(bKey)) {
+            this.bgBack.setTexture(bKey).setSize(960, 540).setScale(1).setAlpha(1).clearTint();
+          }
+        });
+        this.load.start();
+      }
     }
 
     if (room === 4 && this.textures.exists('bg-graveyard')) {

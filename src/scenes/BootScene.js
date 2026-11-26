@@ -10,6 +10,8 @@ export class BootScene extends Phaser.Scene {
 
   preload() {
     const { width, height } = this.scale;
+    // Cap parallel downloads so CDN/proxy edges never choke on a 45-file burst
+    this.load.maxParallelDownloads = 6;
 
     // 1. Loading Text & Progress Bar
     const loadingText = this.add.text(width / 2, height / 2 - 12, 'SUMMONING GOTHIC FORCES... 0%', {
@@ -146,15 +148,12 @@ export class BootScene extends Phaser.Scene {
     this.load.json('fireball-frames', 'assets/spritesheets/fireball.json');
     this.load.json('enemy-death-frames', 'assets/spritesheets/enemy-death.json');
 
-    // 4. Backgrounds & Authentic Pixel Art Tiles
+    // 4. Backgrounds & Authentic Pixel Art Tiles (later-chapter biomes stream lazily in background)
     this.load.image('bg-gothic', 'assets/backgrounds/background.png');
     this.load.image('bg-columns', 'assets/backgrounds/columns.png');
     this.load.image('bg-graveyard', 'assets/graveyard.png');
     this.load.image('bg-throne', 'assets/backgrounds/bg_throne.png');
     this.load.image('bg-forest', 'assets/backgrounds/bg_forest.png');
-    this.load.image('bg-black-lab', 'assets/backgrounds/bg_black_lab.png');
-    this.load.image('bg-fortress', 'assets/backgrounds/bg_fortress.png');
-    this.load.image('bg-sacred-grounds', 'assets/backgrounds/bg_sacred_grounds.png');
     this.load.image('tile_floor', 'assets/tile_floor.png');
     this.load.image('tile_platform', 'assets/tile_platform.png');
 

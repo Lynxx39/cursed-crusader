@@ -211,8 +211,21 @@ export class MainMenuScene extends Phaser.Scene {
       if (this.modalContainer.visible) this.modalContainer.setVisible(false);
     });
 
-    // 7. Ambient BGM (Lazy background loading so initial menu boots instantly)
+    // 7. Ambient BGM & Later-Chapter Biomes (Lazy background loading so boot finishes fast)
     try {
+      this.load.maxParallelDownloads = 2;
+      let needsLoad = false;
+      const lazyBiomes = [
+        ['bg-sacred-grounds', 'assets/backgrounds/bg_sacred_grounds.png'],
+        ['bg-black-lab', 'assets/backgrounds/bg_black_lab.png'],
+        ['bg-fortress', 'assets/backgrounds/bg_fortress.png']
+      ];
+      lazyBiomes.forEach(([key, path]) => {
+        if (!this.textures.exists(key)) {
+          this.load.image(key, path);
+          needsLoad = true;
+        }
+      });
       if (this.cache.audio.exists('bgm-temple')) {
         if (!this.sound.get('bgm-temple') || !this.sound.get('bgm-temple').isPlaying) {
           this.sound.play('bgm-temple', { loop: true, volume: 0.35 });
@@ -226,8 +239,9 @@ export class MainMenuScene extends Phaser.Scene {
             }
           } catch (e) {}
         });
-        this.load.start();
+        needsLoad = true;
       }
+      if (needsLoad) this.load.start();
     } catch (e) {}
 
     // Modals Container
