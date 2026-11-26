@@ -28,25 +28,39 @@ export class BootScene extends Phaser.Scene {
       progressBar.fillStyle(0xdc2626, 1);
       progressBar.fillRect(width / 2 - 158, height / 2 + 18, 316 * val, 10);
       loadingText.setText(`SUMMONING GOTHIC FORCES... ${Math.round(val * 100)}%`);
+      scheduleFallback();
     });
 
     this.load.on('complete', () => {
+      if (this.bootTimeout) {
+        clearTimeout(this.bootTimeout);
+        this.bootTimeout = null;
+      }
       progressBar.destroy();
       progressBox.destroy();
       loadingText.destroy();
     });
 
-    // Robust safety fallback: If for any reason asset loading takes longer than 2.5s, force transition
-    this.bootTimeout = setTimeout(() => {
-      console.warn('BootScene timeout reached, forcing transition to main menu');
-      try {
-        const initialLoading = document.getElementById('initial-loading');
-        if (initialLoading) initialLoading.remove();
-      } catch (e) {}
-      if (this.scene) {
-        this.scene.start('main-menu');
-      }
-    }, 2500);
+    // Inactivity safety fallback: only fires if loading stalls for 8s without progress
+    const scheduleFallback = () => {
+      if (this.bootTimeout) clearTimeout(this.bootTimeout);
+      this.bootTimeout = setTimeout(() => {
+        console.warn('BootScene stall timeout reached, forcing transition to main menu');
+        try {
+          const initialLoading = document.getElementById('initial-loading');
+          if (initialLoading) initialLoading.remove();
+        } catch (e) {}
+        if (this.scene && this.scene.isActive('boot')) {
+          try {
+            SpriteFactory.generateAll(this);
+            SoundSynth.init();
+            this.buildGothicvaniaAnimations();
+          } catch (e) {}
+          this.scene.start('main-menu');
+        }
+      }, 8000);
+    };
+    scheduleFallback();
 
     // 2. Preload Gothicvania Spritesheets (Ansimuz itch.io collection)
     this.load.spritesheet('player', 'assets/spritesheets/player.png', {
