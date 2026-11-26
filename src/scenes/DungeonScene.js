@@ -348,6 +348,7 @@ export class DungeonScene extends Phaser.Scene {
     EventBus.emit('gold:changed', this.gold);
     EventBus.emit('enemies:count', this.enemies.length);
     EventBus.emit('player:hp_changed', { current: this.player.hp, max: this.player.maxHp });
+    EventBus.emit('potion:changed', { current: this.player.potions, max: this.player.maxPotions });
     EventBus.emit('player:corruption_changed', { current: this.player.corruption, max: 100, isMax: this.player.corruption >= 100 });
     EventBus.emit('skull:rank_changed', { rank: this.player.skullRank });
     EventBus.emit('skill:cooldown', { current: 0, max: this.player.getSkillCooldownMax() });

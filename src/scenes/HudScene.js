@@ -54,6 +54,28 @@ export class HudScene extends Phaser.Scene {
     this.events.on('shutdown', () => {
       this.unsubs.forEach(unsub => unsub && unsub());
     });
+
+    // Immediate initial sync if DungeonScene already started before HudScene listeners attached
+    const d = this.scene.get('dungeon');
+    if (d && d.player) {
+      this.updateHp(d.player.hp, d.player.maxHp);
+      this.updateCorruption({ current: d.player.corruption, max: 100, isMax: d.player.corruption >= 100 });
+      this.updatePotion(d.player.potions, d.player.maxPotions);
+      this.updateGold(d.gold || 0);
+      this.updateRoomNumber(d.currentRoom || 1);
+      this.updateEnemyCount(d.enemies ? d.enemies.length : 0);
+      this.updateSkullRank(d.player.skullRank || 1);
+      this.updateForm(d.player.activeForm || 'crusader');
+      if (d.relicSystem) {
+        this.updateRelics({ all: d.relicSystem.equippedRelics, synergies: d.relicSystem.inscriptionCounts });
+        if (d.relicSystem.equippedQuintessence) {
+          this.updateQuintessence(d.relicSystem.equippedQuintessence);
+        }
+      }
+      if (d.isBossChamber && d.boss && d.boss.active) {
+        this.showBossBar({ name: d.boss.enemyType, maxHp: d.boss.maxHp });
+      }
+    }
   }
 
   createHealthAndCorruptionBars() {
