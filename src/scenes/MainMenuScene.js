@@ -12,118 +12,188 @@ export class MainMenuScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
 
-    // 1. Background Visuals & Parallax Ruins
-    this.add.rectangle(0, 0, width, height, 0x05070a).setOrigin(0, 0);
+    // 1. Atmospheric Layered Cathedral Backdrop (Full-bleed art, zero cutoff seams)
+    this.add.rectangle(0, 0, width, height, 0x05070c).setOrigin(0, 0);
 
-    if (this.textures.exists('bg-gothic')) {
-      const bg = this.add.image(width / 2, height / 2, 'bg-gothic')
+    if (this.textures.exists('bg-throne')) {
+      this.add.image(width / 2, height / 2, 'bg-throne')
         .setDisplaySize(width, height)
-        .setAlpha(0.35);
+        .setTint(0xc4b5fd)
+        .setAlpha(0.68);
+    } else if (this.textures.exists('bg-gothic')) {
+      this.add.tileSprite(0, 0, 400, 224, 'bg-gothic')
+        .setOrigin(0, 0)
+        .setScale(2.42)
+        .setAlpha(0.55);
     }
 
     if (this.textures.exists('bg-columns')) {
-      const columns = this.add.image(width / 2, height / 2 + 40, 'bg-columns')
-        .setDisplaySize(width, height)
-        .setAlpha(0.45);
+      this.add.tileSprite(0, 0, 400, 224, 'bg-columns')
+        .setOrigin(0, 0)
+        .setScale(2.42)
+        .setTint(0x94a3b8)
+        .setAlpha(0.55);
     }
 
-    // Atmospheric Stone Pedestal
+    // Subtle dark gradient scrim over the right menu column for high legibility
+    const rightScrim = this.add.rectangle(625, height / 2, 470, height, 0x04060b, 0.58);
+    rightScrim.setDepth(1);
+
+    // 2. Full-Width Grounded Gothic Stone Terrace & Diorama Stage (y = 438..540)
     if (this.textures.exists('tile_floor')) {
-      for (let x = 200; x < width - 200; x += 32) {
-        this.add.image(x + 16, 440, 'tile_floor').setAlpha(0.7);
-      }
+      this.add.tileSprite(width / 2, 446, width, 32, 'tile_floor').setDepth(4);
+    }
+    if (this.textures.exists('tile_foundation')) {
+      this.add.tileSprite(width / 2, 478, width, 32, 'tile_foundation').setDepth(4);
+      this.add.tileSprite(width / 2, 510, width, 32, 'tile_foundation').setDepth(4);
+      this.add.tileSprite(width / 2, 542, width, 32, 'tile_foundation').setDepth(4);
     }
 
-    // Blood Quartz Currency Banner (Top Right)
-    const quartzVal = metaProgression.getBloodQuartz();
-    this.add.text(width - 24, 24, `🩸 BLOOD QUARTZ: ${quartzVal}`, {
-      fontFamily: 'monospace',
-      fontSize: '13px',
-      fontStyle: 'bold',
-      color: '#f87171',
-      stroke: '#05070a',
-      strokeThickness: 3
-    }).setOrigin(1, 0);
-
-    // 2. Animated Crusader Knight Silhouette on Pedestal
-    if (this.anims.exists('player-idle')) {
-      const knight = this.add.sprite(width / 2 - 200, 394, 'player');
-      knight.setScale(1.4);
-      knight.anims.play('player-idle');
-      knight.setTint(0xcfd8dc);
-
+    // Diorama Props on Left Stage (x = 40..360)
+    if (this.textures.exists('prop_gothic_banner')) {
+      this.add.image(76, 376, 'prop_gothic_banner').setDepth(3).setAlpha(0.92);
+      this.add.image(330, 376, 'prop_gothic_banner').setDepth(3).setAlpha(0.92);
+    }
+    if (this.textures.exists('shrine_glow')) {
+      const shrineAura = this.add.image(132, 392, 'shrine_glow')
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(3).setScale(1.3).setAlpha(0.65);
       this.tweens.add({
-        targets: knight,
-        y: 391,
-        duration: 1800,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
+        targets: shrineAura, alpha: { from: 0.4, to: 0.78 }, scale: { from: 1.2, to: 1.38 },
+        duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+      });
+    }
+    if (this.textures.exists('gate_boss')) {
+      const portal = this.add.sprite(132, 384, 'gate_boss').setDepth(4).setScale(1.0);
+      if (this.anims.exists('anim-gate-boss')) portal.anims.play('anim-gate-boss');
+    } else if (this.textures.exists('shrine_blood')) {
+      this.add.image(132, 404, 'shrine_blood').setDepth(4);
+    }
+    if (this.textures.exists('prop_candelabra')) {
+      this.add.image(298, 412, 'prop_candelabra').setDepth(5);
+    }
+    if (this.textures.exists('prop_soul_lantern')) {
+      this.add.image(52, 402, 'prop_soul_lantern').setDepth(5);
+    }
+    if (this.textures.exists('torch_sconce')) {
+      [76, 330].forEach((tx) => {
+        if (this.textures.exists('torch_glow')) {
+          const g = this.add.image(tx, 314, 'torch_glow')
+            .setBlendMode(Phaser.BlendModes.ADD).setDepth(3).setAlpha(0.55);
+          this.tweens.add({
+            targets: g, alpha: { from: 0.38, to: 0.68 }, duration: 400 + Math.random() * 200,
+            yoyo: true, repeat: -1
+          });
+        }
+        this.add.sprite(tx, 320, 'torch_sconce').setDepth(4);
       });
     }
 
-    // 3. Floating Atmospheric Embers & Dust Motes
+    // Hero Crusader Standing on Terrace Diorama (grounded cleanly on tile_floor y=430)
+    if (this.textures.exists('shadow_ellipse')) {
+      this.add.image(222, 431, 'shadow_ellipse').setScale(1.6, 1.05).setDepth(5).setAlpha(0.7);
+    }
+    if (this.anims.exists('player-idle')) {
+      const knight = this.add.sprite(222, 395, 'player').setDepth(6);
+      knight.setScale(1.65);
+      knight.anims.play('player-idle');
+      knight.setTint(0xe2e8f0);
+    }
+
+    // Blood Quartz & Crusade Summary Badge (Top Right)
+    const quartzVal = metaProgression.getBloodQuartz();
+    const bestChamber = metaProgression.data.highestChamber || 1;
+    const badgeW = 198;
+    const badgeX = width - 16 - badgeW / 2;
+    this.add.rectangle(badgeX, 30, badgeW, 34, 0x090d16, 0.92)
+      .setStrokeStyle(1.5, 0x7c3aed).setDepth(15);
+    if (this.textures.exists('blood_quartz')) {
+      const qIcon = this.add.sprite(badgeX - 74, 30, 'blood_quartz').setDepth(16).setScale(1.1);
+      if (this.anims.exists('blood-quartz-spin')) qIcon.anims.play('blood-quartz-spin');
+    }
+    this.add.text(badgeX - 56, 23, `QUARTZ: ${quartzVal}`, {
+      fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold', color: '#f43f5e',
+      stroke: '#05070a', strokeThickness: 3
+    }).setOrigin(0, 0.5).setDepth(16);
+    this.add.text(badgeX - 56, 38, `BEST: CH ${bestChamber}/12`, {
+      fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#94a3b8'
+    }).setOrigin(0, 0.5).setDepth(16);
+
+    // 3. Floating Atmospheric Embers
     this.createFloatingEmbers(width, height);
 
-    // 4. Game Title & Subtitle (Cinzel Dark Fantasy Typography)
-    const title = this.add.text(width / 2 + 100, 110, 'CURSED CRUSADER', {
+    // 4. Right-Side Title Header + Ornate Gothic Crest & Divider
+    const menuX = 625;
+    if (this.textures.exists('hud_skull_crest')) {
+      this.add.image(menuX, 58, 'hud_skull_crest').setScale(1.15).setDepth(10);
+    }
+
+    const title = this.add.text(menuX, 102, 'CURSED CRUSADER', {
       fontFamily: 'Cinzel, MedievalSharp, serif',
-      fontSize: '44px',
+      fontSize: '42px',
       fontStyle: 'bold',
       color: '#fbbf24',
       stroke: '#05070a',
       strokeThickness: 8,
-      letterSpacing: 2
-    }).setOrigin(0.5);
+      letterSpacing: 3
+    }).setOrigin(0.5).setDepth(10);
 
-    // Sinister Blood-Red Underglow
     this.tweens.add({
       targets: title,
-      scaleX: 1.03,
-      scaleY: 1.03,
-      duration: 2200,
+      scaleX: 1.02,
+      scaleY: 1.02,
+      duration: 2400,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut'
     });
 
-    this.add.text(width / 2 + 100, 155, '❖ A SKUL-INSPIRED GOTHICVANIA ROGUE-LITE ❖', {
-      fontFamily: 'monospace',
-      fontSize: '12px',
-      fontStyle: 'bold',
-      color: '#f87171',
-      stroke: '#000000',
-      strokeThickness: 4,
-      letterSpacing: 1
-    }).setOrigin(0.5);
+    // Decorative gold divider under title
+    this.add.rectangle(menuX, 134, 340, 1.5, 0xb45309, 0.85).setDepth(10);
+    this.add.rectangle(menuX, 134, 8, 8, 0xfbbf24).setRotation(Math.PI / 4).setDepth(11);
 
-    // 5. Interactive Skul-Style Menu Options
-    const startY = 210;
+    this.add.text(menuX, 154, 'A SKUL-INSPIRED GOTHICVANIA ROGUELITE', {
+      fontFamily: 'monospace',
+      fontSize: '11px',
+      fontStyle: 'bold',
+      color: '#fda4af',
+      stroke: '#05070a',
+      strokeThickness: 4,
+      letterSpacing: 1.5
+    }).setOrigin(0.5).setDepth(10);
+
+    // 5. Interactive Gothic Menu Buttons (Pixel-art icons + Primary CTA highlight)
+    const startY = 206;
     const menuItems = [
       {
-        text: '▶ START EXPEDITION',
+        text: 'START EXPEDITION',
         color: '#fde047',
+        iconFrame: 343,
+        isPrimary: true,
         action: () => this.startExpedition()
       },
       {
-        text: '🔮 THE DARK SANCTUARY (UPGRADES)',
-        color: '#c084fc',
+        text: 'THE DARK SANCTUARY',
+        sub: 'UPGRADES',
+        color: '#d8b4fe',
+        iconFrame: 129,
         action: () => this.scene.start('sanctuary')
       },
       {
-        text: '⚔ CONTROLS & COMBAT GUIDE',
+        text: 'CONTROLS & COMBAT',
         color: '#e2e8f0',
+        iconFrame: 37,
         action: () => this.showControlsModal()
       },
       {
-        text: '❖ RELIC COMPENDIUM',
-        color: '#a855f7',
+        text: 'RELIC COMPENDIUM',
+        color: '#c084fc',
+        iconFrame: 302,
         action: () => this.showRelicsModal()
       }
     ];
 
     menuItems.forEach((item, index) => {
-      this.createMenuButton(width / 2 + 100, startY + index * 48, item.text, item.color, item.action);
+      this.createMenuButton(menuX, startY + index * 50, item);
     });
 
     // Support keyboard shortcuts (SPACE / ENTER) when no modal is open
@@ -161,33 +231,58 @@ export class MainMenuScene extends Phaser.Scene {
     this.modalContainer = this.add.container(0, 0).setVisible(false).setDepth(100);
   }
 
-  createMenuButton(x, y, label, textColor, onClick) {
-    const btnBg = this.add.rectangle(x, y, 320, 38, 0x0f172a, 0.85)
-      .setStrokeStyle(1.5, 0x334155)
+  createMenuButton(x, y, item) {
+    const w = 340;
+    const h = 40;
+    const isPrimary = Boolean(item.isPrimary);
+    const baseFill = isPrimary ? 0x280d17 : 0x0b101d;
+    const hoverFill = isPrimary ? 0x3b1322 : 0x162036;
+    const baseStroke = isPrimary ? 0xd97706 : 0x334155;
+
+    const btnBg = this.add.rectangle(x, y, w, h, baseFill, 0.92)
+      .setStrokeStyle(isPrimary ? 2 : 1.5, baseStroke)
+      .setDepth(10)
       .setInteractive({ useHandCursor: true });
 
-    const btnText = this.add.text(x, y, label, {
-      fontFamily: 'monospace',
-      fontSize: '14px',
+    // Corner gold rivets for authentic gothic frame craftsmanship
+    const r1 = this.add.rectangle(x - w / 2 + 5, y - h / 2 + 5, 3, 3, isPrimary ? 0xfbbf24 : 0x64748b).setDepth(11);
+    const r2 = this.add.rectangle(x + w / 2 - 5, y - h / 2 + 5, 3, 3, isPrimary ? 0xfbbf24 : 0x64748b).setDepth(11);
+    const r3 = this.add.rectangle(x - w / 2 + 5, y + h / 2 - 5, 3, 3, isPrimary ? 0xfbbf24 : 0x64748b).setDepth(11);
+    const r4 = this.add.rectangle(x + w / 2 - 5, y + h / 2 - 5, 3, 3, isPrimary ? 0xfbbf24 : 0x64748b).setDepth(11);
+
+    let icon = null;
+    if (this.textures.exists('icons_16x16') && item.iconFrame !== undefined) {
+      icon = this.add.image(x - w / 2 + 26, y, 'icons_16x16', item.iconFrame).setScale(1.5).setDepth(12);
+    }
+
+    const labelStr = item.sub ? `${item.text}  (${item.sub})` : item.text;
+    const btnText = this.add.text(x + 8, y, labelStr, {
+      fontFamily: isPrimary ? 'Cinzel, monospace' : 'monospace',
+      fontSize: isPrimary ? '15px' : '13px',
       fontStyle: 'bold',
-      color: textColor,
+      color: item.color,
       stroke: '#05070a',
-      strokeThickness: 3
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      strokeThickness: 4,
+      letterSpacing: isPrimary ? 1 : 0.4
+    }).setOrigin(0.5).setDepth(12).setInteractive({ useHandCursor: true });
+
+    const targets = icon ? [btnBg, btnText, icon, r1, r2, r3, r4] : [btnBg, btnText, r1, r2, r3, r4];
 
     const onHover = () => {
-      btnBg.setFillStyle(0x1e293b, 0.95);
-      btnBg.setStrokeStyle(2, 0xf59e0b);
+      btnBg.setFillStyle(hoverFill, 0.98);
+      btnBg.setStrokeStyle(2, 0xfbbf24);
       btnText.setColor('#ffffff');
-      this.tweens.add({ targets: [btnBg, btnText], scaleX: 1.05, scaleY: 1.05, duration: 120 });
+      this.tweens.killTweensOf(targets);
+      this.tweens.add({ targets, scaleX: 1.03, scaleY: 1.03, duration: 110 });
       try { SoundSynth.playHit(); } catch (e) {}
     };
 
     const onOut = () => {
-      btnBg.setFillStyle(0x0f172a, 0.85);
-      btnBg.setStrokeStyle(1.5, 0x334155);
-      btnText.setColor(textColor);
-      this.tweens.add({ targets: [btnBg, btnText], scaleX: 1.0, scaleY: 1.0, duration: 120 });
+      btnBg.setFillStyle(baseFill, 0.92);
+      btnBg.setStrokeStyle(isPrimary ? 2 : 1.5, baseStroke);
+      btnText.setColor(item.color);
+      this.tweens.killTweensOf(targets);
+      this.tweens.add({ targets, scaleX: 1.0, scaleY: 1.0, duration: 110 });
     };
 
     btnBg.on('pointerover', onHover);
@@ -195,14 +290,12 @@ export class MainMenuScene extends Phaser.Scene {
     btnBg.on('pointerout', onOut);
     btnText.on('pointerout', onOut);
 
-    btnBg.on('pointerdown', () => {
+    const trigger = () => {
       try { SoundSynth.playSlash(3); } catch (e) {}
-      onClick();
-    });
-    btnText.on('pointerdown', () => {
-      try { SoundSynth.playSlash(3); } catch (e) {}
-      onClick();
-    });
+      item.action();
+    };
+    btnBg.on('pointerdown', trigger);
+    btnText.on('pointerdown', trigger);
   }
 
   startExpedition() {
@@ -267,10 +360,10 @@ export class MainMenuScene extends Phaser.Scene {
 
     const { width, height } = this.scale;
     const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.85).setOrigin(0, 0).setInteractive();
-    const box = this.add.rectangle(width / 2, height / 2, 820, 460, 0x090d16)
+    const box = this.add.rectangle(width / 2, height / 2 - 10, 820, 440, 0x090d16)
       .setStrokeStyle(2, 0x9333ea);
 
-    const title = this.add.text(width / 2, height / 2 - 196, '❖ RELIC COMPENDIUM & INSCRIPTION SYNERGIES ❖', {
+    const title = this.add.text(width / 2, height / 2 - 200, '❖ RELIC COMPENDIUM & INSCRIPTION SYNERGIES ❖', {
       fontFamily: 'Cinzel, monospace', fontSize: '18px', fontStyle: 'bold', color: '#e879f9',
       stroke: '#05070a', strokeThickness: 4
     }).setOrigin(0.5);
@@ -283,9 +376,9 @@ export class MainMenuScene extends Phaser.Scene {
       const col = idx % 2;
       const row = Math.floor(idx / 2);
       const rx = width / 2 + (col === 0 ? -195 : 195);
-      const ry = height / 2 - 120 + row * 82;
+      const ry = height / 2 - 128 + row * 80;
 
-      const card = this.add.rectangle(rx, ry, 370, 72, 0x0f172a, 0.9)
+      const card = this.add.rectangle(rx, ry, 370, 74, 0x0f172a, 0.9)
         .setStrokeStyle(1, 0x4c1d95);
       elements.push(card);
 
@@ -295,21 +388,22 @@ export class MainMenuScene extends Phaser.Scene {
       }
 
       const ins = r.inscriptions.map(i => `[${i}]`).join(' ');
-      const nameTxt = this.add.text(rx - 130, ry - 18, r.name.toUpperCase(), {
+      const nameTxt = this.add.text(rx - 130, ry - 21, r.name.toUpperCase(), {
         fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold', color: '#fbbf24'
       }).setOrigin(0, 0.5);
-      const synTxt = this.add.text(rx - 130, ry, ins, {
+      const synTxt = this.add.text(rx - 130, ry - 5, ins, {
         fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#c084fc'
       }).setOrigin(0, 0.5);
-      const descTxt = this.add.text(rx - 130, ry + 18, r.description, {
-        fontFamily: 'monospace', fontSize: '10px', color: '#cbd5e1', wordWrap: { width: 295 }
+      const descTxt = this.add.text(rx - 130, ry + 15, r.description, {
+        fontFamily: 'monospace', fontSize: '9.5px', color: '#cbd5e1', wordWrap: { width: 295 }
       }).setOrigin(0, 0.5);
 
       elements.push(nameTxt, synTxt, descTxt);
     });
 
-    const closeBtn = this.add.text(width / 2, height / 2 + 198, '[RETURN TO MENU]', {
-      fontFamily: 'monospace', fontSize: '14px', fontStyle: 'bold', color: '#f87171'
+    const closeBtn = this.add.text(width / 2, height / 2 + 184, '[RETURN TO MENU]', {
+      fontFamily: 'monospace', fontSize: '13px', fontStyle: 'bold', color: '#f87171',
+      backgroundColor: 'rgba(15, 23, 42, 0.9)', padding: { x: 14, y: 5 }
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
     closeBtn.on('pointerdown', () => this.modalContainer.setVisible(false));

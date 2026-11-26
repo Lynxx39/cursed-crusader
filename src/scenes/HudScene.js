@@ -219,7 +219,11 @@ export class HudScene extends Phaser.Scene {
       stroke: '#05070a', strokeThickness: 3
     }).setOrigin(1, 0).setDepth(21);
 
-    this.quartzText = this.add.text(rightX, 80, `🩸 QUARTZ: ${initialQuartz}`, {
+    if (this.textures.exists('blood_quartz')) {
+      const qIcon = this.add.sprite(rightX - 88, 86, 'blood_quartz').setDepth(21).setScale(0.95);
+      if (this.anims.exists('blood-quartz-spin')) qIcon.anims.play('blood-quartz-spin');
+    }
+    this.quartzText = this.add.text(rightX, 80, `QUARTZ: ${initialQuartz}`, {
       fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold', color: '#f43f5e',
       stroke: '#05070a', strokeThickness: 3
     }).setOrigin(1, 0).setDepth(21);
@@ -234,7 +238,7 @@ export class HudScene extends Phaser.Scene {
 
   updateQuartz(amt) {
     if (this.quartzText) {
-      this.quartzText.setText(`🩸 QUARTZ: ${amt}`);
+      this.quartzText.setText(`QUARTZ: ${amt}`);
     }
   }
 

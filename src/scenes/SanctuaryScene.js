@@ -11,73 +11,98 @@ export class SanctuaryScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
 
-    // 1. Dark Crypt Backdrop
-    this.add.rectangle(0, 0, width, height, 0x05070a).setOrigin(0, 0);
+    // 1. Astral Sacred Grounds Crypt Backdrop
+    this.add.rectangle(0, 0, width, height, 0x05070c).setOrigin(0, 0);
 
-    if (this.textures.exists('bg-gothic')) {
+    if (this.textures.exists('bg-sacred-grounds')) {
+      this.add.image(width / 2, height / 2, 'bg-sacred-grounds')
+        .setDisplaySize(width, height)
+        .setAlpha(0.48);
+    } else if (this.textures.exists('bg-gothic')) {
       this.add.image(width / 2, height / 2, 'bg-gothic')
         .setDisplaySize(width, height)
-        .setAlpha(0.25);
+        .setAlpha(0.28);
     }
+    this.add.rectangle(width / 2, height / 2, width, height, 0x05070c, 0.42);
 
-    // 2. Header
-    this.add.text(width / 2, 40, '❖ THE DARK SANCTUARY ❖', {
+    // 2. Header + Divider
+    this.add.text(width / 2, 36, 'THE DARK SANCTUARY', {
       fontFamily: 'Cinzel, monospace',
-      fontSize: '26px',
+      fontSize: '28px',
       fontStyle: 'bold',
-      color: '#c084fc',
+      color: '#e879f9',
       stroke: '#05070a',
-      strokeThickness: 5
+      strokeThickness: 6,
+      letterSpacing: 2
     }).setOrigin(0.5);
+    this.add.rectangle(width / 2, 56, 260, 1.5, 0x7e22ce, 0.9);
 
-    this.add.text(width / 2, 62, 'Offer Blood Quartz to permanently augment your dark vessel', {
+    this.add.text(width / 2, 70, 'Offer Blood Quartz to permanently augment your cursed vessel', {
       fontFamily: 'monospace',
-      fontSize: '12px',
-      color: '#94a3b8'
+      fontSize: '11px',
+      color: '#cbd5e1'
     }).setOrigin(0.5);
 
     // 2b. Lifetime Crusade Ledger (Centered below subtitle — zero overlap)
     const d = metaProgression.data;
-    this.add.text(width / 2, 82, `RUNS: ${d.totalRuns || 0}  •  BEST CHAMBER: ${d.highestChamber || 1}/12  •  BOSSES SLAIN: ${d.bossesSlain || 0}`, {
+    this.add.text(width / 2, 88, `RUNS: ${d.totalRuns || 0}  •  BEST CHAMBER: ${d.highestChamber || 1}/12  •  BOSSES SLAIN: ${d.bossesSlain || 0}`, {
       fontFamily: 'monospace',
       fontSize: '10px',
       fontStyle: 'bold',
-      color: '#cbd5e1',
+      color: '#fbbf24',
       stroke: '#05070a',
       strokeThickness: 3
     }).setOrigin(0.5);
 
-    // 3. Blood Quartz Counter (Top Right)
-    this.quartzContainer = this.add.container(width - 160, 42);
-    const qPlate = this.add.rectangle(0, 0, 160, 32, 0x0f172a).setStrokeStyle(2, 0x7c3aed);
-    this.quartzText = this.add.text(0, 0, `🩸 QUARTZ: ${metaProgression.getBloodQuartz()}`, {
+    // 3. Blood Quartz Counter (Top Right with animated pixel gem)
+    this.quartzContainer = this.add.container(width - 108, 40);
+    const qPlate = this.add.rectangle(0, 0, 174, 34, 0x090d16, 0.94).setStrokeStyle(1.5, 0x7c3aed);
+    const qChildren = [qPlate];
+    if (this.textures.exists('blood_quartz')) {
+      const qGem = this.add.sprite(-64, 0, 'blood_quartz').setScale(1.1);
+      if (this.anims.exists('blood-quartz-spin')) qGem.anims.play('blood-quartz-spin');
+      qChildren.push(qGem);
+    }
+    this.quartzText = this.add.text(8, 0, `QUARTZ: ${metaProgression.getBloodQuartz()}`, {
       fontFamily: 'monospace',
-      fontSize: '13px',
+      fontSize: '12px',
       fontStyle: 'bold',
-      color: '#c084fc'
+      color: '#f43f5e',
+      stroke: '#05070a',
+      strokeThickness: 3
     }).setOrigin(0.5);
-    this.quartzContainer.add([qPlate, this.quartzText]);
+    qChildren.push(this.quartzText);
+    this.quartzContainer.add(qChildren);
 
     // 4. Upgrades Grid (2 Columns x 3 Rows)
     this.cards = [];
     this.renderUpgradeCards();
 
-    // 5. Back Button (Bottom Center)
-    const backBtn = this.add.text(width / 2, height - 38, '◀ RETURN TO MAIN EXPEDITION', {
+    // 5. Back Button (Positioned well clear of bottom controls pill)
+    const backBg = this.add.rectangle(width / 2, height - 66, 280, 34, 0x0b101d, 0.94)
+      .setStrokeStyle(1.5, 0xd97706)
+      .setInteractive({ useHandCursor: true });
+    const backBtn = this.add.text(width / 2, height - 66, '◀ RETURN TO MAIN EXPEDITION', {
       fontFamily: 'monospace',
-      fontSize: '14px',
+      fontSize: '13px',
       fontStyle: 'bold',
       color: '#fde047',
-      backgroundColor: 'rgba(15, 23, 42, 0.9)',
-      padding: { x: 18, y: 8 }
+      stroke: '#05070a',
+      strokeThickness: 3
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-    backBtn.on('pointerover', () => backBtn.setColor('#ffffff'));
-    backBtn.on('pointerout', () => backBtn.setColor('#fde047'));
-    backBtn.on('pointerdown', () => {
+    const onHover = () => { backBg.setFillStyle(0x162036, 0.98); backBtn.setColor('#ffffff'); };
+    const onOut = () => { backBg.setFillStyle(0x0b101d, 0.94); backBtn.setColor('#fde047'); };
+    const goBack = () => {
       try { SoundSynth.playHit(); } catch (e) { }
       this.scene.start('main-menu');
-    });
+    };
+    backBg.on('pointerover', onHover);
+    backBtn.on('pointerover', onHover);
+    backBg.on('pointerout', onOut);
+    backBtn.on('pointerout', onOut);
+    backBg.on('pointerdown', goBack);
+    backBtn.on('pointerdown', goBack);
 
     this.input.keyboard.on('keydown-ESC', () => this.scene.start('main-menu'));
   }
@@ -153,12 +178,12 @@ export class SanctuaryScene extends Phaser.Scene {
         pips.push(pip);
       }
 
-      // Upgrade Action Button on Right
-      let btnText = isMax ? 'MAX RANK' : (canAfford ? `🩸 ${cost} UPGRADE` : `🔒 🩸 ${cost} QUARTZ`);
+      // Upgrade Action Button on Right (clean pixel text, zero broken emoji)
+      let btnText = isMax ? 'MAX RANK' : (canAfford ? `${cost} QTZ • UPGRADE` : `${cost} QTZ`);
       let btnColor = isMax ? '#10b981' : (canAfford ? '#fde047' : '#64748b');
-      let btnBg = isMax ? 'rgba(6, 78, 59, 0.4)' : (canAfford ? 'rgba(88, 28, 135, 0.7)' : 'rgba(15, 23, 42, 0.85)');
+      let btnBg = isMax ? 'rgba(6, 78, 59, 0.45)' : (canAfford ? 'rgba(88, 28, 135, 0.78)' : 'rgba(15, 23, 42, 0.85)');
 
-      const upBtn = this.add.text(cardW / 2 - 18, 0, btnText, {
+      const upBtn = this.add.text(cardW / 2 - 16, 0, btnText, {
         fontFamily: 'monospace',
         fontSize: '11px',
         fontStyle: 'bold',
@@ -174,7 +199,7 @@ export class SanctuaryScene extends Phaser.Scene {
         upBtn.on('pointerdown', () => {
           if (metaProgression.purchaseUpgrade(upgrade.id)) {
             try { SoundSynth.playHolySmite(); } catch (e) { }
-            this.quartzText.setText(`🩸 QUARTZ: ${metaProgression.getBloodQuartz()}`);
+            this.quartzText.setText(`QUARTZ: ${metaProgression.getBloodQuartz()}`);
             this.renderUpgradeCards();
           }
         });
