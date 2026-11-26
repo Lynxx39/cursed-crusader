@@ -2,6 +2,7 @@
 import Phaser from 'phaser';
 import { SoundSynth } from '../core/SoundSynth.js';
 import { EventBus } from '../core/EventBus.js';
+import { MetaProgression } from '../systems/MetaProgression.js';
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y, type = 'ghoul') {
@@ -176,6 +177,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.kingSlashCooldown = 2.0;
       this.kingNovaCooldown = 5.0;
       this.kingTeleportCooldown = 4.0;
+    }
+
+    // Apply Difficulty HP Scaling cleanly across all enemies & bosses
+    const diff = MetaProgression.getInstance().getDifficultyConfig();
+    if (diff && diff.enemyHpMult && diff.enemyHpMult !== 1.0 && this.maxHp) {
+      this.maxHp = Math.max(12, Math.round(this.maxHp * diff.enemyHpMult));
+      this.hp = this.maxHp;
     }
 
     // State & Timers
@@ -1065,7 +1073,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
 
     if (quartzDrop > 0 && this.scene && typeof this.scene.spawnBloodQuartz === 'function') {
-      this.scene.spawnBloodQuartz(this.x, this.y, quartzDrop);
+      const diff = MetaProgression.getInstance().getDifficultyConfig();
+      const scaledQuartz = Math.max(1, Math.round(quartzDrop * ((diff && diff.quartzMult) || 1.0)));
+      this.scene.spawnBloodQuartz(this.x, this.y, scaledQuartz);
     }
 
     EventBus.emit('enemy:killed', { enemy: this, type: this.enemyType });

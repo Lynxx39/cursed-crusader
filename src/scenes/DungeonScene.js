@@ -1657,7 +1657,8 @@ export class DungeonScene extends Phaser.Scene {
       const mult = (this.player && this.player.statMods && this.player.statMods.corruptionGainMult) || 1.0;
       this.player.addCorruption(Math.round(3 * mult * 10) / 10);
       const bonusHeal = (this.player && this.player.statMods && this.player.statMods.orbHeal) || 0;
-      const healAmt = 4 + bonusHeal;
+      const diffHeal = (this.player && this.player.orbHealBonus) || 0;
+      const healAmt = 4 + bonusHeal + diffHeal;
       this.player.heal(healAmt);
       this.juice.emitBlood(pickup.x, pickup.y, 4);
     } else if (pickup.pickupType === 'gold') {

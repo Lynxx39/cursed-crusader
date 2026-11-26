@@ -2,6 +2,52 @@
 import { EventBus } from '../core/EventBus.js';
 
 const STORAGE_KEY = 'cursed_crusader_save_v1';
+const DIFFICULTY_KEY = 'cursed_crusader_difficulty';
+
+export const DIFFICULTY_MODES = {
+  rookie: {
+    id: 'rookie',
+    label: 'ROOKIE',
+    shortDesc: '200 HP • -55% DMG TAKEN • 3 POTIONS',
+    color: '#4ade80',
+    hex: 0x4ade80,
+    hpBonus: 50,
+    potionBonus: 1,
+    enemyDamageMult: 0.45,
+    enemyHpMult: 0.75,
+    invulnSeconds: 0.85,
+    orbHealBonus: 4,
+    quartzMult: 1.0
+  },
+  normal: {
+    id: 'normal',
+    label: 'NORMAL',
+    shortDesc: '175 HP • BALANCED DMG (-25%) • 2 POTIONS',
+    color: '#fbbf24',
+    hex: 0xfbbf24,
+    hpBonus: 25,
+    potionBonus: 0,
+    enemyDamageMult: 0.75,
+    enemyHpMult: 0.90,
+    invulnSeconds: 0.70,
+    orbHealBonus: 2,
+    quartzMult: 1.0
+  },
+  cursed: {
+    id: 'cursed',
+    label: 'CURSED',
+    shortDesc: '150 HP • FULL BRUTAL DMG • +25% QUARTZ',
+    color: '#ef4444',
+    hex: 0xef4444,
+    hpBonus: 0,
+    potionBonus: 0,
+    enemyDamageMult: 1.05,
+    enemyHpMult: 1.15,
+    invulnSeconds: 0.55,
+    orbHealBonus: 0,
+    quartzMult: 1.25
+  }
+};
 
 export const SANCTUARY_UPGRADES = [
   {
@@ -176,6 +222,26 @@ export class MetaProgression {
     });
 
     return bonus;
+  }
+
+  getDifficultyMode() {
+    try {
+      const saved = localStorage.getItem(DIFFICULTY_KEY);
+      if (saved && DIFFICULTY_MODES[saved]) return saved;
+    } catch (e) { }
+    return 'normal';
+  }
+
+  setDifficultyMode(modeId) {
+    const valid = DIFFICULTY_MODES[modeId] ? modeId : 'normal';
+    try {
+      localStorage.setItem(DIFFICULTY_KEY, valid);
+    } catch (e) { }
+    return DIFFICULTY_MODES[valid];
+  }
+
+  getDifficultyConfig() {
+    return DIFFICULTY_MODES[this.getDifficultyMode()] || DIFFICULTY_MODES.normal;
   }
 
   recordRunEnd({ chamber, bossKilled }) {

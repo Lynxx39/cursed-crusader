@@ -2,7 +2,7 @@
 import Phaser from 'phaser';
 import { SoundSynth } from '../core/SoundSynth.js';
 import { RELIC_DATABASE } from '../systems/RelicSystem.js';
-import { metaProgression } from '../systems/MetaProgression.js';
+import { metaProgression, DIFFICULTY_MODES } from '../systems/MetaProgression.js';
 
 export class MainMenuScene extends Phaser.Scene {
   constructor() {
@@ -124,12 +124,12 @@ export class MainMenuScene extends Phaser.Scene {
     // 4. Right-Side Title Header + Ornate Gothic Crest & Divider
     const menuX = 625;
     if (this.textures.exists('hud_skull_crest')) {
-      this.add.image(menuX, 58, 'hud_skull_crest').setScale(1.15).setDepth(10);
+      this.add.image(menuX, 46, 'hud_skull_crest').setScale(1.1).setDepth(10);
     }
 
-    const title = this.add.text(menuX, 102, 'CURSED CRUSADER', {
+    const title = this.add.text(menuX, 86, 'CURSED CRUSADER', {
       fontFamily: 'Cinzel, MedievalSharp, serif',
-      fontSize: '42px',
+      fontSize: '40px',
       fontStyle: 'bold',
       color: '#fbbf24',
       stroke: '#05070a',
@@ -148,12 +148,12 @@ export class MainMenuScene extends Phaser.Scene {
     });
 
     // Decorative gold divider under title
-    this.add.rectangle(menuX, 134, 340, 1.5, 0xb45309, 0.85).setDepth(10);
-    this.add.rectangle(menuX, 134, 8, 8, 0xfbbf24).setRotation(Math.PI / 4).setDepth(11);
+    this.add.rectangle(menuX, 116, 340, 1.5, 0xb45309, 0.85).setDepth(10);
+    this.add.rectangle(menuX, 116, 8, 8, 0xfbbf24).setRotation(Math.PI / 4).setDepth(11);
 
-    this.add.text(menuX, 154, 'A SKUL-INSPIRED GOTHICVANIA ROGUELITE', {
+    this.add.text(menuX, 134, 'A SKUL-INSPIRED GOTHICVANIA ROGUELITE', {
       fontFamily: 'monospace',
-      fontSize: '11px',
+      fontSize: '10.5px',
       fontStyle: 'bold',
       color: '#fda4af',
       stroke: '#05070a',
@@ -161,8 +161,11 @@ export class MainMenuScene extends Phaser.Scene {
       letterSpacing: 1.5
     }).setOrigin(0.5).setDepth(10);
 
+    // 4b. Difficulty Mode Selector Pills (ROOKIE / NORMAL / CURSED)
+    this.createDifficultySelector(menuX, 166);
+
     // 5. Interactive Gothic Menu Buttons (Pixel-art icons + Primary CTA highlight)
-    const startY = 206;
+    const startY = 228;
     const menuItems = [
       {
         text: 'START EXPEDITION',
@@ -193,7 +196,7 @@ export class MainMenuScene extends Phaser.Scene {
     ];
 
     menuItems.forEach((item, index) => {
-      this.createMenuButton(menuX, startY + index * 50, item);
+      this.createMenuButton(menuX, startY + index * 46, item);
     });
 
     // Support keyboard shortcuts (SPACE / ENTER) when no modal is open
@@ -229,6 +232,62 @@ export class MainMenuScene extends Phaser.Scene {
 
     // Modals Container
     this.modalContainer = this.add.container(0, 0).setVisible(false).setDepth(100);
+  }
+
+  createDifficultySelector(centerX, y) {
+    const modes = ['rookie', 'normal', 'cursed'];
+    const pillW = 108;
+    const gap = 8;
+    const pills = [];
+
+    this.diffSummaryText = this.add.text(centerX, y + 23, '', {
+      fontFamily: 'monospace',
+      fontSize: '9.5px',
+      fontStyle: 'bold',
+      color: '#cbd5e1',
+      stroke: '#05070a',
+      strokeThickness: 3
+    }).setOrigin(0.5).setDepth(11);
+
+    const refresh = () => {
+      const activeId = metaProgression.getDifficultyMode();
+      const activeCfg = DIFFICULTY_MODES[activeId] || DIFFICULTY_MODES.normal;
+      this.diffSummaryText.setText(`${activeCfg.label}: ${activeCfg.shortDesc}`).setColor(activeCfg.color);
+      pills.forEach(({ mode, bg, label }) => {
+        const selected = mode.id === activeId;
+        bg.setFillStyle(selected ? 0x161f33 : 0x090d16, selected ? 0.96 : 0.78);
+        bg.setStrokeStyle(selected ? 2 : 1, selected ? mode.hex : 0x334155);
+        label.setColor(selected ? mode.color : '#64748b');
+      });
+    };
+
+    modes.forEach((id, idx) => {
+      const mode = DIFFICULTY_MODES[id];
+      const px = centerX + (idx - 1) * (pillW + gap);
+      const bg = this.add.rectangle(px, y, pillW, 24, 0x090d16, 0.85)
+        .setStrokeStyle(1, 0x334155)
+        .setDepth(10)
+        .setInteractive({ useHandCursor: true });
+      const label = this.add.text(px, y, mode.label, {
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: mode.color,
+        stroke: '#05070a',
+        strokeThickness: 3
+      }).setOrigin(0.5).setDepth(11).setInteractive({ useHandCursor: true });
+
+      const pick = () => {
+        metaProgression.setDifficultyMode(mode.id);
+        try { SoundSynth.playHit(); } catch (e) {}
+        refresh();
+      };
+      bg.on('pointerdown', pick);
+      label.on('pointerdown', pick);
+      pills.push({ mode, bg, label });
+    });
+
+    refresh();
   }
 
   createMenuButton(x, y, item) {
@@ -302,7 +361,9 @@ export class MainMenuScene extends Phaser.Scene {
     if (this.isStarting) return;
     this.isStarting = true;
     const bonuses = metaProgression.getCombinedStatBonuses();
-    const startHp = 150 + (bonuses.maxHp || 0);
+    const diff = metaProgression.getDifficultyConfig();
+    const startHp = 150 + (bonuses.maxHp || 0) + (diff.hpBonus || 0);
+    const startPotions = (bonuses.maxPotions || 2) + (diff.potionBonus || 0);
     const startGold = bonuses.startingGold || 0;
 
     this.cameras.main.fade(450, 5, 7, 10);
@@ -314,7 +375,7 @@ export class MainMenuScene extends Phaser.Scene {
         localStorage.removeItem('cursed_crusader_quintessence');
         localStorage.setItem('cursed_crusader_skull_rank', '1');
       } catch (e) {}
-      this.scene.start('dungeon', { room: 1, gold: startGold, relics: [], hp: startHp, corruption: 0, skullRank: 1, quintessence: null });
+      this.scene.start('dungeon', { room: 1, gold: startGold, relics: [], hp: startHp, potions: startPotions, corruption: 0, skullRank: 1, quintessence: null });
       this.scene.launch('hud');
     });
   }

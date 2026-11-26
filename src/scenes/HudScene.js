@@ -227,6 +227,12 @@ export class HudScene extends Phaser.Scene {
       fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold', color: '#f43f5e',
       stroke: '#05070a', strokeThickness: 3
     }).setOrigin(1, 0).setDepth(21);
+
+    const diff = MetaProgression.getInstance().getDifficultyConfig();
+    this.diffModeText = this.add.text(rightX, 99, `MODE: ${diff.label}`, {
+      fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: diff.color,
+      stroke: '#05070a', strokeThickness: 3
+    }).setOrigin(1, 0).setDepth(21);
   }
 
   updatePotion(current, max) {

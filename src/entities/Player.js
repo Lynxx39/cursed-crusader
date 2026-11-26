@@ -10,12 +10,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
-    // Meta-Progression Permanent Upgrades
+    // Meta-Progression & Difficulty Mode Modifiers
     const meta = MetaProgression.getInstance();
     const metaBonuses = meta.getCombinedStatBonuses();
+    const diff = meta.getDifficultyConfig();
+    this.incomingDamageMult = diff.enemyDamageMult !== undefined ? diff.enemyDamageMult : 0.75;
+    this.hitInvulnDuration = diff.invulnSeconds || 0.70;
+    this.orbHealBonus = diff.orbHealBonus || 0;
 
     // HP & Vitality (Safely guarded against undefined/NaN)
-    this.maxHp = 150 + (metaBonuses.maxHp || 0);
+    this.maxHp = 150 + (metaBonuses.maxHp || 0) + (diff.hpBonus || 0);
     this.hp = (initialHp !== undefined && !isNaN(initialHp) && Number(initialHp) > 0)
       ? Math.min(this.maxHp, Number(initialHp))
       : this.maxHp;
@@ -31,8 +35,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.isDead = false;
 
     // Consumable Potions ([F] Key)
-    this.maxPotions = metaBonuses.maxPotions || 2;
-    this.potions = (scene && scene.savedPotions !== undefined) ? scene.savedPotions : this.maxPotions;
+    this.maxPotions = (metaBonuses.maxPotions || 2) + (diff.potionBonus || 0);
+    this.potions = (scene && scene.savedPotions !== undefined) ? Math.min(this.maxPotions, scene.savedPotions) : this.maxPotions;
     this.potionCooldown = 0;
 
     // Form / Skull Swap (Skul: The Hero Slayer mechanic)
@@ -1008,7 +1012,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   takeDamage(amount, sourceX) {
     if (this.isDead || this.isDashing || this.invulnTimer > 0 || !this.body) return;
-    this.invulnTimer = 0.55;
+    this.invulnTimer = this.hitInvulnDuration || 0.70;
+    amount = Math.max(1, Math.round(amount * (this.incomingDamageMult !== undefined ? this.incomingDamageMult : 0.75)));
 
     if (this.isBeast) {
       amount = Math.round(amount * 0.7); // 30% damage reduction in Berserker/Awakened form
