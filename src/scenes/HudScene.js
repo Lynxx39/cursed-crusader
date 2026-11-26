@@ -171,7 +171,7 @@ export class HudScene extends Phaser.Scene {
   }
 
   createExpeditionProgressBar() {
-    const cx = 480;
+    const cx = 500;
     const cy = 18;
     const barW = 280;
 
@@ -210,7 +210,7 @@ export class HudScene extends Phaser.Scene {
 
   showZoneBanner(zoneName) {
     if (!this.zoneBannerText) {
-      this.zoneBannerText = this.add.text(480, 148, '', {
+      this.zoneBannerText = this.add.text(500, 156, '', {
         fontFamily: 'Cinzel, serif',
         fontSize: '20px',
         fontStyle: 'bold',
@@ -225,7 +225,7 @@ export class HudScene extends Phaser.Scene {
     this.tweens.add({
       targets: this.zoneBannerText,
       alpha: 1,
-      y: 138,
+      y: 146,
       duration: 400,
       hold: 1800,
       yoyo: true,
@@ -341,31 +341,31 @@ export class HudScene extends Phaser.Scene {
     this.relicIconsGroup = [];
     this.relicSlotContainer.add([this.relicBeltPlate, label, this.relicsText]);
 
-    // Bold Skul-Style Bottom-Center 4-Slot Skill & Action Dock ([Q], [G], [TAB], [U])
-    this.skillSlotContainer = this.add.container(480, 480).setDepth(24);
+    // Compact Top-Center 4-Slot Skill & Action Dock ([Q], [G], [TAB], [U]) — keeps 100% of floor/combat clear!
+    this.skillSlotContainer = this.add.container(500, 72).setDepth(24);
     const hasIcons = this.textures.exists('icons_16x16');
-    const slotW = 78;
-    const slotH = 42;
-    const gap = 8;
-    const totalDockW = slotW * 4 + gap * 3 + 16;
+    const slotW = 76;
+    const slotH = 34;
+    const gap = 6;
+    const totalDockW = slotW * 4 + gap * 3 + 12;
 
-    const dockBg = this.add.rectangle(0, 0, totalDockW, 50, 0x050810, 0.90)
+    const dockBg = this.add.rectangle(0, 0, totalDockW, 40, 0x050810, 0.82)
       .setStrokeStyle(1.5, 0x334155);
     this.skillSlotContainer.add(dockBg);
 
     const makeSlot = (idx, keyTag, iconFrame, accentHex, accentStr, initLabel) => {
       const sx = (idx - 1.5) * (slotW + gap);
-      const bg = this.add.rectangle(sx, 0, slotW, slotH, 0x0b1120, 0.95)
+      const bg = this.add.rectangle(sx, 0, slotW, slotH, 0x0b1120, 0.92)
         .setStrokeStyle(1.5, accentHex);
-      const keyBadge = this.add.text(sx - slotW / 2 + 5, -slotH / 2 + 4, `[${keyTag}]`, {
-        fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#fbbf24'
+      const keyBadge = this.add.text(sx - slotW / 2 + 4, -slotH / 2 + 3, `[${keyTag}]`, {
+        fontFamily: 'monospace', fontSize: '8.5px', fontStyle: 'bold', color: '#fbbf24'
       }).setOrigin(0, 0);
       let icon = null;
       if (hasIcons) {
-        icon = this.add.image(sx - 18, 5, 'icons_16x16', iconFrame).setScale(1.45);
+        icon = this.add.image(sx - 18, 4, 'icons_16x16', iconFrame).setScale(1.25);
       }
-      const status = this.add.text(sx + 14, 5, initLabel, {
-        fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: accentStr
+      const status = this.add.text(sx + 13, 4, initLabel, {
+        fontFamily: 'monospace', fontSize: '9.5px', fontStyle: 'bold', color: accentStr
       }).setOrigin(0.5);
       this.skillSlotContainer.add(icon ? [bg, keyBadge, icon, status] : [bg, keyBadge, status]);
       return { bg, keyBadge, icon, status, sx };
@@ -384,8 +384,8 @@ export class HudScene extends Phaser.Scene {
     this.swapSlotBg = tabSlot.bg;
     this.swapSlotIcon = tabSlot.icon;
     this.swapSlotLabel = tabSlot.status;
-    this.skullRankText = this.add.text(tabSlot.sx + slotW / 2 - 5, -slotH / 2 + 4, '★I', {
-      fontFamily: 'monospace', fontSize: '9.5px', fontStyle: 'bold', color: '#fbbf24'
+    this.skullRankText = this.add.text(tabSlot.sx + slotW / 2 - 4, -slotH / 2 + 3, '★I', {
+      fontFamily: 'monospace', fontSize: '8.5px', fontStyle: 'bold', color: '#fbbf24'
     }).setOrigin(1, 0);
     this.skillSlotContainer.add(this.skullRankText);
 
@@ -454,7 +454,7 @@ export class HudScene extends Phaser.Scene {
   }
 
   createNotificationBanner() {
-    this.banner = this.add.text(480, 104, '', {
+    this.banner = this.add.text(500, 120, '', {
       fontFamily: 'monospace', fontSize: '20px', fontStyle: 'bold', color: '#fbbf24',
       stroke: '#000000', strokeThickness: 5, align: 'center'
     }).setOrigin(0.5).setAlpha(0).setDepth(25);
