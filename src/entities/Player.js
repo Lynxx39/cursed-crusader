@@ -324,6 +324,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const rightDown = this.keys.right.isDown || this.keys.altRight.isDown;
 
     let moveSpeed = this.speed;
+    if (this.isAwakened) moveSpeed *= 1.2;
     if (this.isBeast && this.beastType === 'feral') moveSpeed *= 1.6;
     if (this.isBeast && this.beastType === 'gargoyle') moveSpeed *= 0.85;
     if (this.frenzyTimer > 0) {
@@ -436,6 +437,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   trySwapForm() {
     if (this.isDead || !this.active) return;
+    if (this.isAwakened) {
+      EventBus.emit('notification:show', {
+        text: 'CORRUPT OVERDRIVE ACTIVE — PRESS [I] FOR APOCALYPSE FINISHER!',
+        color: '#ef4444'
+      });
+      return;
+    }
     if (this.swapCooldown > 0) {
       EventBus.emit('notification:show', {
         text: `FORM SWAP RECHARGING (${this.swapCooldown.toFixed(1)}s)`,
@@ -525,7 +533,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const cdMax = this.getSkillCooldownMax();
     this.skillCooldown = cdMax;
     const rankMult = 1.0 + (this.skullRank - 1) * 0.25;
-    const dmgMult = (this.statMods.damageMult || 1.0) * rankMult;
+    const dmgMult = (this.statMods.damageMult || 1.0) * rankMult * (this.isAwakened ? 1.45 : 1.0);
     const dir = this.facing || 1;
     EventBus.emit('skill:cooldown', { current: cdMax, max: cdMax });
 
@@ -541,6 +549,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.scene.juice.emitVoidEmbers(this.x + dir * 24, this.y, 18);
 
       const bounds = new Phaser.Geom.Rectangle(dir > 0 ? this.x - 10 : this.x - 100, this.y - 36, 110, 72);
+      if (typeof this.scene.breakPropsInRect === 'function') {
+        this.scene.breakPropsInRect(bounds, this.x, true);
+      }
       for (const enemy of (this.scene.enemies || [])) {
         if (!enemy.active || enemy.isDead) continue;
         if (Phaser.Geom.Intersects.RectangleToRectangle(bounds, enemy.getBounds())) {
@@ -833,7 +844,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   executeBeastAttack() {
     this.comboStep = (this.comboStep % 3) + 1;
     this.comboTimer = 0.8;
-    const speedMult = (this.statMods.attackSpeedMult || 1.0) * (this.frenzyTimer > 0 ? 1.3 : 1.0);
+    const speedMult = (this.statMods.attackSpeedMult || 1.0) * (this.frenzyTimer > 0 ? 1.3 : 1.0) * (this.isAwakened ? 1.22 : 1.0);
     this.attackCooldown = 0.16 / speedMult;
     this.attackAnimTimer = 0.22 / speedMult;
 
@@ -856,9 +867,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     SoundSynth.playRoar();
     SoundSynth.playSlash(this.comboStep);
 
-    // Spawn short-range void crescent ONLY on 3rd combo step finisher
-    if (this.comboStep === 3 && typeof this.scene.spawnVoidWave === 'function') {
-      this.scene.spawnVoidWave(hitboxX, hitboxY, dir, Math.round(35 * this.statMods.damageMult));
+    const awakenDmgMult = this.isAwakened ? 1.45 : 1.0;
+
+    // Void Crescent: 3rd combo hit normally, or combo step 2 & 3 while 100% Corrupt Awakened!
+    if ((this.comboStep === 3 || (this.isAwakened && this.comboStep >= 2)) && typeof this.scene.spawnVoidWave === 'function') {
+      this.scene.spawnVoidWave(hitboxX, hitboxY, dir, Math.round(35 * this.statMods.damageMult * awakenDmgMult));
     }
 
     this.scene.juice.emitBlood(hitboxX, hitboxY, 14);
@@ -869,11 +882,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     const bounds = new Phaser.Geom.Rectangle(
-      dir > 0 ? this.x : this.x - 70,
+      dir > 0 ? this.x - 10 : this.x - 74,
       this.y - 30,
-      70,
-      60
+      84,
+      62
     );
+
+    if (typeof this.scene.breakPropsInRect === 'function') {
+      this.scene.breakPropsInRect(bounds, this.x, true);
+    }
 
     for (const enemy of this.scene.enemies) {
       if (!enemy.active || enemy.isDead) continue;
@@ -881,7 +898,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         const critChance = (this.statMods.critChance || 0.10) + 0.20;
         const isCrit = Math.random() < critChance;
         const critMult = 1.6 + (this.statMods.critDamageBonus || 0);
-        const damage = Math.round(55 * this.statMods.damageMult * (isCrit ? critMult : 1.0));
+        const damage = Math.round(55 * this.statMods.damageMult * awakenDmgMult * (isCrit ? critMult : 1.0));
         enemy.takeDamage(damage, this.x, isCrit, true);
         this.applyLifesteal(damage);
 
@@ -893,7 +910,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   applyLifesteal(damageDealt) {
-    const heal = Math.round(damageDealt * (this.statMods.lifesteal || 0.18));
+    const awakenHealMult = this.isAwakened ? 1.5 : 1.0;
+    const heal = Math.round(damageDealt * (this.statMods.lifesteal || 0.18) * awakenHealMult);
     if (heal > 0 && this.hp < this.maxHp) {
       this.hp = Math.min(this.maxHp, this.hp + heal);
       this.scene.juice.popDamageNumber(this.x, this.y - 30, heal, 'heal');
@@ -1016,7 +1034,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     amount = Math.max(1, Math.round(amount * (this.incomingDamageMult !== undefined ? this.incomingDamageMult : 0.75)));
 
     if (this.isBeast) {
-      amount = Math.round(amount * 0.7); // 30% damage reduction in Berserker/Awakened form
+      amount = Math.round(amount * (this.isAwakened ? 0.55 : 0.7)); // 45% DR in Corrupt Awakened Overdrive, 30% in Berserker
     }
     if (this.shieldTimer > 0) {
       amount = Math.round(amount * 0.5); // 50% shield reduction from Aegis / Titan Heart

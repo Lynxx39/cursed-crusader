@@ -319,6 +319,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
+    if (this.state !== 'MELEE_WINDUP' && (this.parryGlint || this.windupWarnBox)) {
+      this.cleanupTelegraphFx();
+    }
+
     // Handle Ground Melee Windup + Parry Telegraph state (Standard readability!)
     if (this.state === 'MELEE_WINDUP') {
       this.setVelocityX(0);
@@ -915,6 +919,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   executeCultistTeleport(player) {
     if (!this.scene || !this.active || this.isDead) return;
+    this.cleanupTelegraphFx();
     this.teleportCooldown = 3.5;
     this.scene.juice.emitVoidEmbers(this.x, this.y, 16);
     try { SoundSynth.playDash(); } catch (e) {}
@@ -929,6 +934,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   executeBossTeleport(player) {
     if (!this.scene || !this.active || this.isDead) return;
+    this.cleanupTelegraphFx();
     this.scene.juice.emitVoidEmbers(this.x, this.y, 30);
     this.scene.juice.emitSparks(this.x, this.y, 18);
     this.scene.juice.addTrauma(0.4);
@@ -972,6 +978,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.state = 'STAGGERED';
       this.staggerTimer = 1.6;
       this.attackCooldown = 1.8;
+      return;
+    }
+
+    // Ranged casters must NEVER fall through into ground melee windup boxes
+    if (this.enemyType === 'sorcerer' || this.enemyType === 'belial' || this.enemyType === 'malakor') {
+      this.state = 'CHASE';
+      this.attackCooldown = 0.6;
       return;
     }
 
@@ -1019,7 +1032,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.anims.play('skeleton-attack', true);
     }
 
-    const reach = this.attackRange + 16;
+    const reach = Math.min(130, this.attackRange + 16);
     if (this.scene && this.scene.textures && this.scene.textures.exists('fx_parry_glint')) {
       this.parryGlint = this.scene.add.image(this.x + dir * 22, this.y - 14, 'fx_parry_glint')
         .setDepth(26).setScale(1.1);

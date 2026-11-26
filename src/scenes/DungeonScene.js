@@ -1326,6 +1326,7 @@ export class DungeonScene extends Phaser.Scene {
           enemy.update(time, delta, this.player);
         } else {
           if (enemy.body.velocity.x !== 0) enemy.setVelocityX(0);
+          if (enemy.parryGlint || enemy.windupWarnBox) enemy.cleanupTelegraphFx();
         }
       }
     }
@@ -1402,6 +1403,18 @@ export class DungeonScene extends Phaser.Scene {
     }
   }
 
+  breakPropsInRect(rect, sourceX, isBeast = false) {
+    if (!this.props || !rect) return;
+    const hitRect = new Phaser.Geom.Rectangle(rect.x - 16, rect.y - 8, rect.width + 32, rect.height + 16);
+    for (const prop of [...this.props.getChildren()]) {
+      if (!prop || !prop.active || prop.isBroken) continue;
+      const propBounds = prop.getBounds();
+      if (Phaser.Geom.Intersects.RectangleToRectangle(hitRect, propBounds)) {
+        prop.shatter(sourceX, isBeast);
+      }
+    }
+  }
+
   checkAttackHit(x, y, width, height, damage, isBeast) {
     const rect = new Phaser.Geom.Rectangle(x - width / 2, y - height / 2, width, height);
     let hitAnyEnemy = false;
@@ -1431,16 +1444,8 @@ export class DungeonScene extends Phaser.Scene {
       }
     }
 
-    // Check hit on breakable props (urns, crates)
-    if (this.props) {
-      for (const prop of this.props.getChildren()) {
-        if (!prop.active || prop.isBroken) continue;
-        const propBounds = prop.getBounds();
-        if (Phaser.Geom.Intersects.RectangleToRectangle(rect, propBounds)) {
-          prop.shatter(x, isBeast);
-        }
-      }
-    }
+    // Check hit on breakable props (urns, coffins, chests)
+    this.breakPropsInRect(rect, x, isBeast);
 
     // Tactile micro hit-stop & impact feedback (Dead Cells feel)
     if (hitAnyEnemy) {

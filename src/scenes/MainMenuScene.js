@@ -411,9 +411,9 @@ export class MainMenuScene extends Phaser.Scene {
     const guideContent = [
       '• MOVEMENT: [A / D] | JUMP: [W / SPACE] (Double Jump) | DASH: [RMB / SHIFT]',
       '• COMBAT: [LMB / J] 3-Hit Combo | [K / X] Holy Parry (Deflects & Staggers)',
-      '• SKUL SKILLS: [Q] Skull Active Skill | [TAB / C] Skull Swap Skill Shockwave',
+      '• SKUL SWAP: [TAB / C] Stance Toggle (Crusader <-> Berserker) | [Q] Active Skill',
       '• QUINTESSENCE: [G] Summon Equipped Quintessence Power (Bosses / Bazaar)',
-      '• CONSUMABLES & AWAKEN: [F] Healing Potion | [U] Beast Awaken | [I] Finisher',
+      '• POTION & CORRUPT OVERDRIVE: [F] Heal | [U] 100% Overdrive (+45% DMG) | [I] Finisher',
       '• INSCRIPTIONS: Stack matching Relic & Quintessence tags (2 / 4) for Set Bonuses!'
     ].join('\n\n');
 

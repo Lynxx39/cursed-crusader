@@ -731,8 +731,8 @@ export class HudScene extends Phaser.Scene {
   showBeastBanner({ formType, duration }) {
     this.awakenPrompt.setVisible(false);
     this.beastStatusText.setVisible(true);
-    this.beastStatusText.setText(`[AWAKENED: ${formType.toUpperCase()}] - [I]: FINISHER`);
-    this.showBanner(`⚔ AWAKENED: ${formType.toUpperCase()}! ⚔`, '#ef4444');
+    this.beastStatusText.setText('[CORRUPT OVERDRIVE: +45% DMG & +20% SPD] - [I]: FINISHER');
+    this.showBanner(`⚔ CORRUPT OVERDRIVE: ${formType.toUpperCase()}! ⚔`, '#ef4444');
     this.updateAwakenSlot(100, true);
   }
 
