@@ -90,6 +90,27 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('potion-purple', 'assets/spritesheets/potion-purple.png', {
       frameWidth: 16, frameHeight: 16
     });
+    this.load.spritesheet('potion-green', 'assets/spritesheets/potion-green.png', {
+      frameWidth: 16, frameHeight: 16
+    });
+    this.load.spritesheet('icons_16x16', 'assets/spritesheets/icons_16x16.png', {
+      frameWidth: 16, frameHeight: 16
+    });
+    this.load.spritesheet('blood_quartz', 'assets/spritesheets/blood_quartz.png', {
+      frameWidth: 16, frameHeight: 20
+    });
+    this.load.spritesheet('plague_hound', 'assets/spritesheets/plague_hound.png', {
+      frameWidth: 64, frameHeight: 48
+    });
+    this.load.spritesheet('void_seraph', 'assets/spritesheets/void_seraph.png', {
+      frameWidth: 96, frameHeight: 96
+    });
+    this.load.spritesheet('cursed_king', 'assets/spritesheets/cursed_king.png', {
+      frameWidth: 96, frameHeight: 96
+    });
+    this.load.spritesheet('collector_npc', 'assets/spritesheets/collector_npc.png', {
+      frameWidth: 64, frameHeight: 64
+    });
 
     // 2c. Props & Environment Assets
     this.load.image('prop_chest', 'assets/props/chest.png');
@@ -98,6 +119,9 @@ export class BootScene extends Phaser.Scene {
     this.load.image('prop_soul_lantern', 'assets/props/soul_lantern.png');
     this.load.image('dragon_bones_head', 'assets/props/dragon-bones-head.png');
     this.load.image('dragon_bones_ribs', 'assets/props/dragon-bones-ribs.png');
+    this.load.image('prop_gothic_banner', 'assets/props/gothic_banner.png');
+    this.load.image('prop_hanging_cage', 'assets/props/hanging_cage.png');
+    this.load.image('prop_candelabra', 'assets/props/iron_candelabra.png');
 
     // 3. Frame JSON Maps
     this.load.json('player-frames', 'assets/spritesheets/player.json');
@@ -109,6 +133,12 @@ export class BootScene extends Phaser.Scene {
     // 4. Backgrounds & Authentic Pixel Art Tiles
     this.load.image('bg-gothic', 'assets/backgrounds/background.png');
     this.load.image('bg-columns', 'assets/backgrounds/columns.png');
+    this.load.image('bg-graveyard', 'assets/graveyard.png');
+    this.load.image('bg-throne', 'assets/backgrounds/bg_throne.png');
+    this.load.image('bg-forest', 'assets/backgrounds/bg_forest.png');
+    this.load.image('bg-black-lab', 'assets/backgrounds/bg_black_lab.png');
+    this.load.image('bg-fortress', 'assets/backgrounds/bg_fortress.png');
+    this.load.image('bg-sacred-grounds', 'assets/backgrounds/bg_sacred_grounds.png');
     this.load.image('tile_floor', 'assets/tile_floor.png');
     this.load.image('tile_platform', 'assets/tile_platform.png');
 
@@ -235,7 +265,13 @@ export class BootScene extends Phaser.Scene {
       { key: 'sorcerer-idle', frames: this.anims.generateFrameNumbers('sorcerer', { start: 0, end: 3 }), frameRate: 6, repeat: -1 },
       { key: 'sorcerer-cast', frames: this.anims.generateFrameNumbers('sorcerer', { start: 0, end: 3 }), frameRate: 10, repeat: 0 },
       { key: 'potion-red-glow', frames: this.anims.generateFrameNumbers('potion-red', { start: 0, end: 3 }), frameRate: 8, repeat: -1 },
-      { key: 'potion-purple-glow', frames: this.anims.generateFrameNumbers('potion-purple', { start: 0, end: 3 }), frameRate: 8, repeat: -1 }
+      { key: 'potion-purple-glow', frames: this.anims.generateFrameNumbers('potion-purple', { start: 0, end: 3 }), frameRate: 8, repeat: -1 },
+      { key: 'potion-green-glow', frames: this.anims.generateFrameNumbers('potion-green', { start: 0, end: 3 }), frameRate: 8, repeat: -1 },
+      { key: 'blood-quartz-spin', frames: this.anims.generateFrameNumbers('blood_quartz', { start: 0, end: 3 }), frameRate: 7, repeat: -1 },
+      { key: 'plague-hound-run', frames: this.anims.generateFrameNumbers('plague_hound', { start: 0, end: 3 }), frameRate: 10, repeat: -1 },
+      { key: 'void-seraph-hover', frames: this.anims.generateFrameNumbers('void_seraph', { start: 0, end: 3 }), frameRate: 6, repeat: -1 },
+      { key: 'cursed-king-idle', frames: this.anims.generateFrameNumbers('cursed_king', { start: 0, end: 3 }), frameRate: 6, repeat: -1 },
+      { key: 'collector-idle', frames: this.anims.generateFrameNumbers('collector_npc', { start: 0, end: 3 }), frameRate: 4, repeat: -1 }
     ];
 
     animDefs.forEach(def => {

@@ -19,6 +19,7 @@ export class HudScene extends Phaser.Scene {
     this.createBossBar();
     this.createRelicChoiceModal();
     this.createGameOverScreen();
+    this.createVictoryScreen();
 
     // Wire EventBus listeners
     this.unsubs = [
@@ -35,13 +36,18 @@ export class HudScene extends Phaser.Scene {
       EventBus.on('gold:changed', (amt) => this.updateGold(amt)),
       EventBus.on('quartz:changed', (amt) => this.updateQuartz(amt)),
       EventBus.on('potion:changed', (data) => this.updatePotion(data.current, data.max)),
-      EventBus.on('form:swapped', (data) => this.updateForm(data.form)),
+      EventBus.on('form:swapped', (data) => this.updateForm(data.form, data.rank)),
       EventBus.on('swap:cooldown', (data) => this.updateSwapCooldown(data.current)),
+      EventBus.on('skill:cooldown', (data) => this.updateSkillCooldown(data.current, data.max)),
+      EventBus.on('quintessence:equipped', (data) => this.updateQuintessence(data.quintessence)),
+      EventBus.on('quintessence:cooldown', (data) => this.updateQuintCooldown(data.current)),
+      EventBus.on('skull:rank_changed', (data) => this.updateSkullRank(data.rank)),
       EventBus.on('enemies:count', (cnt) => this.updateEnemyCount(cnt)),
       EventBus.on('boss:spawned', (bossData) => this.showBossBar(bossData)),
       EventBus.on('boss:hp_changed', (data) => this.updateBossHp(data)),
       EventBus.on('boss:defeated', () => this.hideBossBar()),
       EventBus.on('player:died', () => this.showGameOver()),
+      EventBus.on('game:victory', (data) => this.showVictoryScreen(data)),
       EventBus.on('notification:show', (data) => this.showBanner(data.text, data.color || '#ef4444'))
     ];
 
@@ -97,22 +103,22 @@ export class HudScene extends Phaser.Scene {
       stroke: '#05070a', strokeThickness: 3
     }).setOrigin(0.5).setDepth(23);
 
-    // Awaken Beast Prompt (Flashing when ready)
-    this.awakenPrompt = this.add.text(barX, corrY + 20, '>> [U] AWAKEN BEAST READY <<', {
+    // Awaken Beast Prompt (Positioned cleanly below Potion/Form row — zero overlap!)
+    this.awakenPrompt = this.add.text(barX, corrY + 35, '>> [U] AWAKEN BEAST READY <<', {
       fontFamily: 'Cinzel, monospace', fontSize: '11px', fontStyle: 'bold', color: '#f87171',
       stroke: '#05070a', strokeThickness: 4
     }).setOrigin(0, 0.5).setVisible(false).setDepth(25);
 
     this.tweens.add({
       targets: this.awakenPrompt,
-      alpha: 0.2,
+      alpha: 0.25,
       duration: 350,
       yoyo: true,
       repeat: -1
     });
 
     // Beast Active Header
-    this.beastStatusText = this.add.text(barX, corrY + 34, '', {
+    this.beastStatusText = this.add.text(barX, corrY + 35, '', {
       fontFamily: 'Cinzel, monospace', fontSize: '11px', fontStyle: 'bold', color: '#ef4444',
       stroke: '#05070a', strokeThickness: 4
     }).setOrigin(0, 0.5).setVisible(false).setDepth(25);
@@ -123,7 +129,7 @@ export class HudScene extends Phaser.Scene {
       stroke: '#05070a', strokeThickness: 3
     }).setOrigin(0, 0.5).setDepth(24);
 
-    this.swapFormText = this.add.text(barX + 115, corrY + 18, '🛡️ [TAB] CRUSADER', {
+    this.swapFormText = this.add.text(barX + 120, corrY + 18, '🛡️ [TAB] CRUSADER', {
       fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#38bdf8',
       stroke: '#05070a', strokeThickness: 3
     }).setOrigin(0, 0.5).setDepth(24);
@@ -169,7 +175,7 @@ export class HudScene extends Phaser.Scene {
 
   showZoneBanner(zoneName) {
     if (!this.zoneBannerText) {
-      this.zoneBannerText = this.add.text(480, 120, '', {
+      this.zoneBannerText = this.add.text(480, 148, '', {
         fontFamily: 'Cinzel, serif',
         fontSize: '20px',
         fontStyle: 'bold',
@@ -184,7 +190,7 @@ export class HudScene extends Phaser.Scene {
     this.tweens.add({
       targets: this.zoneBannerText,
       alpha: 1,
-      y: 110,
+      y: 138,
       duration: 400,
       hold: 1800,
       yoyo: true,
@@ -256,19 +262,71 @@ export class HudScene extends Phaser.Scene {
   }
 
   createRelicsDisplay() {
-    this.relicSlotContainer = this.add.container(20, 468).setDepth(20);
-    // Dark gothic belt plate
-    const beltPlate = this.add.rectangle(140, 10, 280, 24, 0x070a12, 0.85)
+    this.relicSlotContainer = this.add.container(16, 466).setDepth(20);
+    // Dark gothic belt plate (expanded to fit up to 8 relic icons + Tier 4 synergies cleanly)
+    const beltPlate = this.add.rectangle(309, 12, 618, 26, 0x070a12, 0.88)
       .setStrokeStyle(1, 0x334155);
-    const label = this.add.text(8, 10, 'RELICS:', {
+    const label = this.add.text(8, 12, 'RELICS:', {
       fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#94a3b8'
     }).setOrigin(0, 0.5);
 
-    this.relicsText = this.add.text(62, 10, 'None acquired', {
+    this.relicsText = this.add.text(60, 12, 'None acquired', {
       fontFamily: 'monospace', fontSize: '10px', color: '#64748b'
     }).setOrigin(0, 0.5);
 
+    this.relicIconsGroup = [];
     this.relicSlotContainer.add([beltPlate, label, this.relicsText]);
+
+    // Skul-Style Active Skill [Q], Quintessence [G], & Skull Rank Plate (bottom-right, clear of Relic Belt)
+    this.skillSlotContainer = this.add.container(644, 466).setDepth(20);
+    const skillPlate = this.add.rectangle(150, 12, 300, 26, 0x070a12, 0.88)
+      .setStrokeStyle(1, 0x334155);
+    this.skillText = this.add.text(10, 12, '[Q] SKILL: READY', {
+      fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#38bdf8'
+    }).setOrigin(0, 0.5);
+    this.quintText = this.add.text(140, 12, '[G] QUINT: —', {
+      fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#64748b'
+    }).setOrigin(0, 0.5);
+    this.skullRankText = this.add.text(290, 12, '★I', {
+      fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#fbbf24'
+    }).setOrigin(1, 0.5);
+    this.skillSlotContainer.add([skillPlate, this.skillText, this.quintText, this.skullRankText]);
+  }
+
+  updateSkillCooldown(cd) {
+    if (!this.skillText) return;
+    if (cd > 0) {
+      this.skillText.setText(`[Q] SKILL: ${cd.toFixed(1)}s`).setColor('#facc15');
+    } else {
+      this.skillText.setText('[Q] SKILL: READY').setColor('#38bdf8');
+    }
+  }
+
+  updateQuintessence(q) {
+    this.equippedQuintName = q ? q.name.split(' ')[0].toUpperCase() : null;
+    if (this.quintText) {
+      if (this.equippedQuintName) {
+        this.quintText.setText(`[G] ${this.equippedQuintName}`).setColor('#e879f9');
+      } else {
+        this.quintText.setText('[G] QUINT: —').setColor('#64748b');
+      }
+    }
+  }
+
+  updateQuintCooldown(cd) {
+    if (!this.quintText || !this.equippedQuintName) return;
+    if (cd > 0) {
+      this.quintText.setText(`[G] ${cd.toFixed(0)}s`).setColor('#facc15');
+    } else {
+      this.quintText.setText(`[G] ${this.equippedQuintName}`).setColor('#e879f9');
+    }
+  }
+
+  updateSkullRank(rank = 1) {
+    if (!this.skullRankText) return;
+    const roman = rank >= 3 ? '★III' : (rank === 2 ? '★II' : '★I');
+    const col = rank >= 3 ? '#f43f5e' : (rank === 2 ? '#c084fc' : '#fbbf24');
+    this.skullRankText.setText(roman).setColor(col);
   }
 
   createNotificationBanner() {
@@ -279,6 +337,7 @@ export class HudScene extends Phaser.Scene {
   }
 
   showBanner(msg, col = '#fbbf24') {
+    this.tweens.killTweensOf(this.banner);
     this.banner.setText(msg).setColor(col).setAlpha(1).setScale(1.2);
     this.tweens.add({
       targets: this.banner,
@@ -289,37 +348,41 @@ export class HudScene extends Phaser.Scene {
     });
   }
 
-  // Boss HP Bar at Top Center (Dark Souls / Metroidvania Style)
+  // Boss HP Bar at Bottom Center (Soulsborne Style — Zero overlap with Player/Top HUD)
   createBossBar() {
-    this.bossBarContainer = this.add.container(480, 80).setVisible(false).setDepth(25);
+    this.bossBarContainer = this.add.container(480, 442).setVisible(false).setDepth(25);
 
-    const bg = this.add.rectangle(0, 0, 440, 20, 0x05070a).setStrokeStyle(2, 0xdc2626);
-    this.bossHpFill = this.add.rectangle(-218, -8, 436, 16, 0xb91c1c).setOrigin(0, 0);
+    const bg = this.add.rectangle(0, 0, 460, 18, 0x05070a, 0.92).setStrokeStyle(2, 0xdc2626);
+    this.bossHpFill = this.add.rectangle(-226, -6, 452, 12, 0xb91c1c).setOrigin(0, 0);
+    const phaseTick = this.add.rectangle(0, 0, 2, 18, 0xfbbf24, 0.85);
     this.bossNameText = this.add.text(0, -18, '⚔ HIGH INQUISITOR MALAKOR ⚔', {
       fontFamily: 'Cinzel, monospace', fontSize: '13px', fontStyle: 'bold', color: '#f87171',
       stroke: '#05070a', strokeThickness: 4
     }).setOrigin(0.5);
 
-    this.bossBarContainer.add([bg, this.bossHpFill, this.bossNameText]);
+    this.bossBarContainer.add([bg, this.bossHpFill, phaseTick, this.bossNameText]);
   }
 
   showBossBar({ name, maxHp }) {
     this.bossNameText.setText(`⚔ ${name.toUpperCase()} ⚔`);
-    this.bossHpFill.width = 436;
+    this.bossHpFill.width = 452;
     this.bossBarContainer.setVisible(true);
+    if (this.progressContainer) this.progressContainer.setVisible(false);
   }
 
   updateBossHp({ current, max }) {
-    const ratio = Math.max(0, current / max);
+    const ratio = Math.max(0, Math.min(1, current / (max || 1)));
+    this.tweens.killTweensOf(this.bossHpFill);
     this.tweens.add({
       targets: this.bossHpFill,
-      width: ratio * 436,
+      width: ratio * 452,
       duration: 150
     });
   }
 
   hideBossBar() {
     this.bossBarContainer.setVisible(false);
+    if (this.progressContainer) this.progressContainer.setVisible(true);
   }
 
   // Interactive Skul-Style Relic Selection Modal
@@ -377,21 +440,28 @@ export class HudScene extends Phaser.Scene {
         .setStrokeStyle(2, 0x7e22ce)
         .setInteractive({ useHandCursor: true });
 
+      const children = [cardBg];
+      if (this.textures.exists('icons_16x16') && relic.iconFrame !== undefined) {
+        const iconBg = this.add.rectangle(0, -96, 36, 36, 0x1e1b4b).setStrokeStyle(1, 0xa855f7);
+        const icon = this.add.image(0, -96, 'icons_16x16', relic.iconFrame).setScale(2);
+        children.push(iconBg, icon);
+      }
+
       // Title
-      const title = this.add.text(0, -100, relic.name, {
-        fontFamily: 'monospace', fontSize: '14px', fontStyle: 'bold', color: '#fbbf24',
+      const title = this.add.text(0, -56, relic.name, {
+        fontFamily: 'monospace', fontSize: '13px', fontStyle: 'bold', color: '#fbbf24',
         align: 'center', wordWrap: { width: 220 }
       }).setOrigin(0.5);
 
       // Inscription Tags
       const synText = relic.inscriptions.map(i => `[${i}]`).join(' ');
-      const inscriptions = this.add.text(0, -65, synText, {
-        fontFamily: 'monospace', fontSize: '11px', fontStyle: 'bold', color: '#c084fc'
+      const inscriptions = this.add.text(0, -30, synText, {
+        fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#c084fc'
       }).setOrigin(0.5);
 
       // Description
-      const desc = this.add.text(0, 5, relic.description, {
-        fontFamily: 'monospace', fontSize: '12px', color: '#e2e8f0',
+      const desc = this.add.text(0, 22, relic.description, {
+        fontFamily: 'monospace', fontSize: '11px', color: '#e2e8f0',
         align: 'center', wordWrap: { width: 210 }
       }).setOrigin(0.5);
 
@@ -403,7 +473,8 @@ export class HudScene extends Phaser.Scene {
         fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold', color: '#ffffff'
       }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-      card.add([cardBg, title, inscriptions, desc, btnBg, btnText]);
+      children.push(title, inscriptions, desc, btnBg, btnText);
+      card.add(children);
 
       const selectThisRelic = () => {
         this.relicModal.setVisible(false);
@@ -481,8 +552,13 @@ export class HudScene extends Phaser.Scene {
     const barW = 210;
     this.hpFillBar.width = ratio * barW;
     if (this.hpGlint) this.hpGlint.width = ratio * barW;
-    this.hpText.setText(`HP ${safeCur} / ${safeMax}`);
+    const hpStr = `HP ${safeCur} / ${safeMax}`;
+    if (this._lastHpStr !== hpStr) {
+      this._lastHpStr = hpStr;
+      this.hpText.setText(hpStr);
+    }
 
+    this.tweens.killTweensOf(this.hpGhostBar);
     this.tweens.add({
       targets: this.hpGhostBar,
       width: ratio * barW,
@@ -498,7 +574,10 @@ export class HudScene extends Phaser.Scene {
     const barW = 210;
     this.corruptionBar.width = ratio * barW;
     if (this.corruptionGlint) this.corruptionGlint.width = ratio * barW;
-    this.corruptionText.setText(`CORRUPTION ${safeCur}%`);
+    if (this._lastCorrPct !== safeCur) {
+      this._lastCorrPct = safeCur;
+      this.corruptionText.setText(`CORRUPTION ${safeCur}%`);
+    }
 
     if (isMax || safeCur >= safeMax) {
       this.awakenPrompt.setVisible(true);
@@ -522,10 +601,42 @@ export class HudScene extends Phaser.Scene {
   }
 
   updateRelics({ all, synergies }) {
-    let synStr = Object.entries(synergies || {}).map(([k, v]) => `${k} [${v}]`).join(' | ');
-    if (!synStr) synStr = 'None';
-    const names = (all || []).map(r => r.name).join(', ');
-    this.relicsText.setText(`RELICS (${all ? all.length : 0}): ${names || 'None'} | SYNERGIES: ${synStr}`);
+    if (this.relicIconsGroup) {
+      this.relicIconsGroup.forEach(obj => obj.destroy());
+    }
+    this.relicIconsGroup = [];
+
+    const list = all || [];
+    if (list.length === 0) {
+      this.relicsText.setText('None acquired').setVisible(true);
+      return;
+    }
+
+    const hasIcons = this.textures.exists('icons_16x16');
+    const synStr = Object.entries(synergies || {})
+      .filter(([, v]) => v >= 2)
+      .map(([k, v]) => `${v >= 4 ? '★' : ''}${k.split(' ')[0]}[${v}]`)
+      .join(' ');
+
+    if (hasIcons) {
+      this.relicsText.setVisible(true);
+      const maxShown = Math.min(list.length, 7);
+      for (let i = 0; i < maxShown; i++) {
+        const r = list[i];
+        const ix = 68 + i * 22;
+        const slot = this.add.rectangle(ix, 12, 18, 18, 0x0f172a).setStrokeStyle(1, 0x7e22ce);
+        const icon = this.add.image(ix, 12, 'icons_16x16', r.iconFrame || 127);
+        this.relicSlotContainer.add([slot, icon]);
+        this.relicIconsGroup.push(slot, icon);
+      }
+      const textX = 68 + maxShown * 22 + 4;
+      this.relicsText.setPosition(textX, 12);
+      const extra = list.length > maxShown ? `+${list.length - maxShown} ` : '';
+      this.relicsText.setText(`${extra}${synStr || `${list.length} active`}`).setColor('#c084fc');
+    } else {
+      const names = list.map(r => r.name).slice(0, 2).join(', ');
+      this.relicsText.setPosition(60, 12).setText(`${names}${list.length > 2 ? ` +${list.length - 2}` : ''}`);
+    }
   }
 
   showRoomCleared() {
@@ -534,6 +645,14 @@ export class HudScene extends Phaser.Scene {
 
   updateRoomNumber(num) {
     this.roomText.setText(`CHAMBER: ${num} / 12`);
+    if (this.gameOverContainer) this.gameOverContainer.setVisible(false);
+    if (this.victoryContainer) this.victoryContainer.setVisible(false);
+    if (this.relicModal) this.relicModal.setVisible(false);
+    if (this.beastStatusText) this.beastStatusText.setVisible(false);
+    const isBoss = (num === 3 || num === 6 || num === 9 || num === 12);
+    if (!isBoss) {
+      this.hideBossBar();
+    }
   }
 
   updateGold(amt) {
@@ -545,6 +664,59 @@ export class HudScene extends Phaser.Scene {
       this.relicModal.setVisible(false);
     }
     this.gameOverContainer.setVisible(true);
+  }
+
+  createVictoryScreen() {
+    this.victoryContainer = this.add.container(480, 270).setVisible(false).setDepth(55);
+
+    const bg = this.add.rectangle(0, 0, 960, 540, 0x05070a, 0.92).setInteractive();
+    const frame = this.add.rectangle(0, 0, 620, 320, 0x0b0f19, 0.96).setStrokeStyle(2, 0xfbbf24);
+
+    const title = this.add.text(0, -100, '👑 ETERNAL ASCENSION 👑', {
+      fontFamily: 'Cinzel, monospace', fontSize: '30px', fontStyle: 'bold', color: '#fde047',
+      stroke: '#000', strokeThickness: 6
+    }).setOrigin(0.5);
+
+    const subtitle = this.add.text(0, -52, 'THE CURSED KING ALDOUS HAS FALLEN. THE CRUSADE IS COMPLETE!', {
+      fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold', color: '#34d399'
+    }).setOrigin(0.5);
+
+    this.victoryStatsText = this.add.text(0, 10, '', {
+      fontFamily: 'monospace', fontSize: '13px', color: '#e2e8f0', align: 'center', lineHeight: 22
+    }).setOrigin(0.5);
+
+    const goSanctuaryBtn = this.add.text(-130, 105, '[ ENTER DARK SANCTUARY ]', {
+      fontFamily: 'monospace', fontSize: '13px', fontStyle: 'bold', color: '#c084fc',
+      backgroundColor: 'rgba(88, 28, 135, 0.5)', padding: { x: 12, y: 8 }
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    const goMenuBtn = this.add.text(145, 105, '[ MAIN MENU ]', {
+      fontFamily: 'monospace', fontSize: '13px', fontStyle: 'bold', color: '#fde047',
+      backgroundColor: 'rgba(15, 23, 42, 0.9)', padding: { x: 12, y: 8 }
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    goSanctuaryBtn.on('pointerdown', () => {
+      this.scene.stop('hud');
+      this.scene.stop('dungeon');
+      this.scene.start('sanctuary');
+    });
+    goMenuBtn.on('pointerdown', () => {
+      this.scene.stop('hud');
+      this.scene.stop('dungeon');
+      this.scene.start('main-menu');
+    });
+
+    this.victoryContainer.add([bg, frame, title, subtitle, this.victoryStatsText, goSanctuaryBtn, goMenuBtn]);
+  }
+
+  showVictoryScreen({ gold = 0, relics = 0, bonusQuartz = 100, totalQuartz = 0 }) {
+    if (this.relicModal) this.relicModal.setVisible(false);
+    this.victoryStatsText.setText([
+      `🪙 GOLD AMASSED: ${gold}`,
+      `❖ RELICS HARNESSED: ${relics}`,
+      `🩸 VICTORY BOUNTY: +${bonusQuartz} BLOOD QUARTZ (TOTAL: ${totalQuartz})`
+    ].join('\n'));
+    this.victoryContainer.setVisible(true);
   }
 }
 

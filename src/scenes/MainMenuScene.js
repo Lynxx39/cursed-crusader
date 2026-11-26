@@ -126,9 +126,17 @@ export class MainMenuScene extends Phaser.Scene {
       this.createMenuButton(width / 2 + 100, startY + index * 48, item.text, item.color, item.action);
     });
 
-    // Support keyboard shortcuts (SPACE / ENTER) to quickly launch expedition
-    this.input.keyboard.on('keydown-SPACE', () => this.startExpedition());
-    this.input.keyboard.on('keydown-ENTER', () => this.startExpedition());
+    // Support keyboard shortcuts (SPACE / ENTER) when no modal is open
+    this.isStarting = false;
+    this.input.keyboard.on('keydown-SPACE', () => {
+      if (!this.modalContainer.visible) this.startExpedition();
+    });
+    this.input.keyboard.on('keydown-ENTER', () => {
+      if (!this.modalContainer.visible) this.startExpedition();
+    });
+    this.input.keyboard.on('keydown-ESC', () => {
+      if (this.modalContainer.visible) this.modalContainer.setVisible(false);
+    });
 
     // 7. Ambient BGM (Lazy background loading so initial menu boots instantly)
     try {
@@ -198,14 +206,22 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   startExpedition() {
+    if (this.isStarting) return;
+    this.isStarting = true;
+    const bonuses = metaProgression.getCombinedStatBonuses();
+    const startHp = 150 + (bonuses.maxHp || 0);
+    const startGold = bonuses.startingGold || 0;
+
     this.cameras.main.fade(450, 5, 7, 10);
     this.time.delayedCall(450, () => {
       try {
         localStorage.setItem('cursed_crusader_corruption', '0');
-        localStorage.setItem('cursed_crusader_gold', '0');
+        localStorage.setItem('cursed_crusader_gold', String(startGold));
         localStorage.setItem('cursed_crusader_relics', '[]');
+        localStorage.removeItem('cursed_crusader_quintessence');
+        localStorage.setItem('cursed_crusader_skull_rank', '1');
       } catch (e) {}
-      this.scene.start('dungeon', { room: 1, gold: 0, relics: [], hp: 150, corruption: 0 });
+      this.scene.start('dungeon', { room: 1, gold: startGold, relics: [], hp: startHp, corruption: 0, skullRank: 1, quintessence: null });
       this.scene.launch('hud');
     });
   }
@@ -225,14 +241,12 @@ export class MainMenuScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     const guideContent = [
-      '• MOVEMENT: [A / D] | JUMP: [W] or [SPACEBAR] (Double Jump)',
-      '• SWORD CLEAVE: [LEFT MOUSE BUTTON] or [J] (3-hit directional combo)',
-      '• DASH (I-FRAMES): [RIGHT MOUSE BUTTON] or [LEFT SHIFT] or [L]',
-      '• PARRY (COUNTER-STRIKE): [K] or [X] (Reflects projectiles, staggers foes)',
-      '• CONSUME POTION: [F] (Restores 45% Max HP)',
-      '• SKUL / FORM SWAP: [TAB] or [C] (Toggle Crusader / Berserker with burst shockwave!)',
-      '• BEAST AWAKENING: [U] (At 100% Corruption, screen finisher [I])',
-      '• THE DARK SANCTUARY: Spend Blood Quartz on permanent meta upgrades!'
+      '• MOVEMENT: [A / D] | JUMP: [W / SPACE] (Double Jump) | DASH: [RMB / SHIFT]',
+      '• COMBAT: [LMB / J] 3-Hit Combo | [K / X] Holy Parry (Deflects & Staggers)',
+      '• SKUL SKILLS: [Q] Skull Active Skill | [TAB / C] Skull Swap Skill Shockwave',
+      '• QUINTESSENCE: [G] Summon Equipped Quintessence Power (Bosses / Bazaar)',
+      '• CONSUMABLES & AWAKEN: [F] Healing Potion | [U] Beast Awaken | [I] Finisher',
+      '• INSCRIPTIONS: Stack matching Relic & Quintessence tags (2 / 4) for Set Bonuses!'
     ].join('\n\n');
 
     const bodyText = this.add.text(width / 2, height / 2 + 5, guideContent, {
@@ -253,29 +267,54 @@ export class MainMenuScene extends Phaser.Scene {
 
     const { width, height } = this.scale;
     const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.85).setOrigin(0, 0).setInteractive();
-    const box = this.add.rectangle(width / 2, height / 2, 700, 440, 0x090d16)
+    const box = this.add.rectangle(width / 2, height / 2, 820, 460, 0x090d16)
       .setStrokeStyle(2, 0x9333ea);
 
-    const title = this.add.text(width / 2, height / 2 - 180, '❖ RELIC COMPENDIUM & INSCRIPTION SYNERGIES ❖', {
+    const title = this.add.text(width / 2, height / 2 - 196, '❖ RELIC COMPENDIUM & INSCRIPTION SYNERGIES ❖', {
       fontFamily: 'Cinzel, monospace', fontSize: '18px', fontStyle: 'bold', color: '#e879f9',
       stroke: '#05070a', strokeThickness: 4
     }).setOrigin(0.5);
 
-    const relicLines = RELIC_DATABASE.map(r => {
+    const elements = [overlay, box, title];
+    const hasIcons = this.textures.exists('icons_16x16');
+
+    // Render all relics cleanly in a 2-column grid with pixel-art icons
+    RELIC_DATABASE.forEach((r, idx) => {
+      const col = idx % 2;
+      const row = Math.floor(idx / 2);
+      const rx = width / 2 + (col === 0 ? -195 : 195);
+      const ry = height / 2 - 120 + row * 82;
+
+      const card = this.add.rectangle(rx, ry, 370, 72, 0x0f172a, 0.9)
+        .setStrokeStyle(1, 0x4c1d95);
+      elements.push(card);
+
+      if (hasIcons && r.iconFrame !== undefined) {
+        const icon = this.add.image(rx - 156, ry, 'icons_16x16', r.iconFrame).setScale(2);
+        elements.push(icon);
+      }
+
       const ins = r.inscriptions.map(i => `[${i}]`).join(' ');
-      return `• ${r.name.toUpperCase()} ${ins}\n   ${r.description}`;
-    }).slice(0, 6).join('\n\n');
+      const nameTxt = this.add.text(rx - 130, ry - 18, r.name.toUpperCase(), {
+        fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold', color: '#fbbf24'
+      }).setOrigin(0, 0.5);
+      const synTxt = this.add.text(rx - 130, ry, ins, {
+        fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#c084fc'
+      }).setOrigin(0, 0.5);
+      const descTxt = this.add.text(rx - 130, ry + 18, r.description, {
+        fontFamily: 'monospace', fontSize: '10px', color: '#cbd5e1', wordWrap: { width: 295 }
+      }).setOrigin(0, 0.5);
 
-    const bodyText = this.add.text(width / 2, height / 2 + 5, relicLines, {
-      fontFamily: 'monospace', fontSize: '11px', color: '#e2e8f0', lineHeight: 18
-    }).setOrigin(0.5);
+      elements.push(nameTxt, synTxt, descTxt);
+    });
 
-    const closeBtn = this.add.text(width / 2, height / 2 + 185, '[RETURN TO MENU]', {
+    const closeBtn = this.add.text(width / 2, height / 2 + 198, '[RETURN TO MENU]', {
       fontFamily: 'monospace', fontSize: '14px', fontStyle: 'bold', color: '#f87171'
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
     closeBtn.on('pointerdown', () => this.modalContainer.setVisible(false));
-    this.modalContainer.add([overlay, box, title, bodyText, closeBtn]);
+    elements.push(closeBtn);
+    this.modalContainer.add(elements);
   }
 
   createFloatingEmbers(width, height) {

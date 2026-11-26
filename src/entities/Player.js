@@ -37,7 +37,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     // Form / Skull Swap (Skul: The Hero Slayer mechanic)
     this.activeForm = 'crusader'; // 'crusader' | 'berserker'
+    this.skullRank = (scene && scene.savedSkullRank) ? scene.savedSkullRank : 1; // 1: Initiated, 2: Awakened, 3: Legendary
     this.swapCooldown = 0;
+    this.skillCooldown = 0;
+    this.baseSkillCooldown = 4.5;
+    this.quintessence = null;
+    this.quintessenceCooldown = 0;
+    this.shieldTimer = 0; // Brief Holy Aegis / Titan Armor reduction
 
     // Grounded Drop-Shadow for 16-bit depth
     if (scene.textures.exists('shadow_ellipse')) {
@@ -62,6 +68,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.comboTimer = 0;
     this.attackCooldown = 0;
     this.attackAnimTimer = 0;
+    this.invulnTimer = 0; // Post-hit i-frames preventing multi-hit burst deaths
     this.frenzyTimer = 0; // Blood Frenzy buff from Altar of Sacrifice
 
     // Corruption & Beast Form (Persisted across rooms and runs)
@@ -69,6 +76,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       ? Math.min(100, Math.max(0, Number(initialCorruption)))
       : 0;
     this.isBeast = false;
+    this.isAwakened = false;
+    this.wasOnFloor = false;
     this.beastType = null;
     this.beastTimer = 0;
     this.maxBeastDuration = 20; // 20 seconds
@@ -109,6 +118,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       potion: Phaser.Input.Keyboard.KeyCodes.F,
       swapTab: Phaser.Input.Keyboard.KeyCodes.TAB,
       swapKey: Phaser.Input.Keyboard.KeyCodes.C,
+      skill: Phaser.Input.Keyboard.KeyCodes.Q,
+      quint: Phaser.Input.Keyboard.KeyCodes.G,
       awaken: Phaser.Input.Keyboard.KeyCodes.U,
       finisher: Phaser.Input.Keyboard.KeyCodes.I,
       shift: Phaser.Input.Keyboard.KeyCodes.SHIFT,
@@ -138,7 +149,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
       // Attacks strictly follow character movement/facing direction (A/D or last faced), NEVER cursor position!
       if (pointer.rightButtonDown() || pointer.button === 2) {
-        this.tryParry();
+        this.tryDash();
       } else if (pointer.leftButtonDown() || pointer.button === 0) {
         this.tryAttack();
       }
@@ -187,6 +198,29 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.attackCooldown > 0) this.attackCooldown -= dt;
     if (this.attackAnimTimer > 0) this.attackAnimTimer -= dt;
     if (this.potionCooldown > 0) this.potionCooldown -= dt;
+    if (this.shieldTimer > 0) this.shieldTimer -= dt;
+    if (this.skillCooldown > 0) {
+      this.skillCooldown -= dt;
+      if (!this._lastSkillEmit || (this._lastSkillEmit - this.skillCooldown) > 0.1 || this.skillCooldown <= 0) {
+        this._lastSkillEmit = this.skillCooldown;
+        EventBus.emit('skill:cooldown', { current: Math.max(0, this.skillCooldown), max: this.getSkillCooldownMax() });
+      }
+    }
+    if (this.quintessenceCooldown > 0) {
+      this.quintessenceCooldown -= dt;
+      if (!this._lastQuintEmit || (this._lastQuintEmit - this.quintessenceCooldown) > 0.15 || this.quintessenceCooldown <= 0) {
+        this._lastQuintEmit = this.quintessenceCooldown;
+        EventBus.emit('quintessence:cooldown', {
+          current: Math.max(0, this.quintessenceCooldown),
+          max: this.quintessence ? this.quintessence.cooldown : 12
+        });
+      }
+    }
+    if (this.invulnTimer > 0) {
+      this.invulnTimer -= dt;
+      this.setAlpha(Math.floor(this.invulnTimer * 20) % 2 === 0 ? 0.55 : 1);
+      if (this.invulnTimer <= 0) this.setAlpha(1);
+    }
     if (this.swapCooldown > 0) {
       this.swapCooldown -= dt;
       if (!this._lastSwapEmit || (this._lastSwapEmit - this.swapCooldown) > 0.1 || this.swapCooldown <= 0) {
@@ -199,8 +233,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       if (this.comboTimer <= 0) this.comboStep = 0;
     }
 
-    // Ground check & Coyote Time
+    // Ground check & Coyote Time + Landing Dust Juice
     const onFloor = this.body.blocked.down || this.body.touching.down;
+    if (onFloor && !this.wasOnFloor && this.body.velocity.y >= 0) {
+      if (this.scene && this.scene.juice) {
+        this.scene.juice.emitSparks(this.x, this.y + 24, 4);
+      }
+    }
+    this.wasOnFloor = onFloor;
+
     if (onFloor) {
       this.coyoteCounter = 0.1; // 100ms coyote grace
       this.jumpCount = 0;
@@ -231,8 +272,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // Handle Active Dash
     if (this.isDashing) {
       this.dashTimer -= dt;
-      if (this.anims && this.scene.anims.exists('player-flying-kick')) {
-        this.anims.play('player-flying-kick', true);
+      const dashAnim = this.isBeast ? 'awakened-flying-kick' : 'player-flying-kick';
+      if (this.anims && this.scene.anims.exists(dashAnim)) {
+        this.anims.play(dashAnim, true);
       }
       if (Math.random() > 0.4) {
         this.scene.juice.emitSparks(this.x, this.y, 1);
@@ -258,11 +300,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    // Handle Beast Mode Decay & Loop (only decays when awakened via [U], not skull form swap)
-    if (this.isBeast && this.beastTimer > 0) {
+    // Handle Awakened Beast Mode Decay & Aura (active via [U])
+    if (this.isAwakened && this.beastTimer > 0) {
       this.beastTimer -= dt;
       this.corruption = Math.max(0, (this.beastTimer / this.maxBeastDuration) * 100);
       EventBus.emit('player:corruption_changed', { current: this.corruption, max: 100, isMax: false });
+
+      if (Math.random() > 0.65 && this.scene && this.scene.juice) {
+        this.scene.juice.emitVoidEmbers(this.x, this.y, 1);
+      }
 
       if (this.beastTimer <= 0) {
         this.revertToKnight();
@@ -313,8 +359,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     // Keyboard action triggers (in addition to Mouse LMB/RMB)
     if (Phaser.Input.Keyboard.JustDown(this.keys.dash) ||
-        Phaser.Input.Keyboard.JustDown(this.keys.altDash) ||
-        Phaser.Input.Keyboard.JustDown(this.keys.shift)) {
+      Phaser.Input.Keyboard.JustDown(this.keys.altDash) ||
+      Phaser.Input.Keyboard.JustDown(this.keys.shift)) {
       this.tryDash();
     }
     if (Phaser.Input.Keyboard.JustDown(this.keys.parry) || Phaser.Input.Keyboard.JustDown(this.keys.altParry)) {
@@ -346,6 +392,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (Phaser.Input.Keyboard.JustDown(this.keys.swapTab) || Phaser.Input.Keyboard.JustDown(this.keys.swapKey)) {
       this.trySwapForm();
     }
+    if (Phaser.Input.Keyboard.JustDown(this.keys.skill)) {
+      this.trySkullSkill();
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.keys.quint)) {
+      this.tryQuintessence();
+    }
   }
 
   tryDrinkPotion() {
@@ -353,7 +405,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.potionCooldown > 0) return; // Prevent accidental double-drinking
     if (this.potions <= 0) {
       EventBus.emit('notification:show', { text: 'NO POTIONS REMAINING!', color: '#ef4444' });
-      try { SoundSynth.playHit(); } catch (e) {}
+      try { SoundSynth.playHit(); } catch (e) { }
       return;
     }
     if (this.hp >= this.maxHp) {
@@ -370,7 +422,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     this.scene.juice.popDamageNumber(this.x, this.y - 20, healAmount, 'crit');
     this.scene.juice.emitHolySparks(this.x, this.y, 22);
-    try { SoundSynth.playHeal(); } catch (e) {}
+    try { SoundSynth.playHeal(); } catch (e) { }
 
     EventBus.emit('notification:show', {
       text: `HEALED +${healAmount} HP! (${this.potions} POTIONS REMAINING)`,
@@ -398,34 +450,191 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       if (this.scene.anims.exists(targetAnim)) this.anims.play(targetAnim, true);
     }
 
-    // Swap Shockwave (Skul Style): Deals burst tactical damage and repels all nearby foes
+    // Swap Shockwave (Skul Style): Unique Swap-In Skill per Skull Form!
+    const rankMult = 1.0 + (this.skullRank - 1) * 0.25;
     this.scene.juice.addTrauma(0.45);
     this.scene.cameras.main.flash(200, this.isBeast ? 180 : 50, this.isBeast ? 20 : 180, this.isBeast ? 50 : 255);
-    this.scene.juice.emitHolySparks(this.x, this.y, 20);
-    this.scene.juice.emitVoidEmbers(this.x, this.y, 24);
-    try { SoundSynth.playRoar(); } catch (e) {}
+    if (this.isBeast) {
+      // Berserker Swap-In: Blood Void Eruption + 3s Frenzy
+      this.scene.juice.emitVoidEmbers(this.x, this.y, 26);
+      this.frenzyTimer = Math.max(this.frenzyTimer, 3.0);
+      try { SoundSynth.playRoar(); } catch (e) { }
+    } else {
+      // Crusader Swap-In: Aegis Sanctum (Staggers nearby foes + Holy Heal)
+      this.scene.juice.emitHolySparks(this.x, this.y, 24);
+      this.shieldTimer = Math.max(this.shieldTimer, 1.5);
+      if (this.hp < this.maxHp) this.heal(6);
+      try { SoundSynth.playHolySmite(); } catch (e) { }
+    }
 
     if (this.scene.enemies) {
       this.scene.enemies.forEach(enemy => {
         if (enemy && enemy.active && !enemy.isDead) {
           const d = Phaser.Math.Distance.Between(this.x, this.y, enemy.x, enemy.y);
-          if (d < 160) {
+          if (d < 175) {
             const knockDir = enemy.x > this.x ? 1 : -1;
-            enemy.takeDamage(35, this.x, true, true);
+            enemy.takeDamage(Math.round(35 * rankMult * (this.statMods.damageMult || 1)), this.x, true, this.isBeast);
             if (enemy && enemy.active && enemy.body && !enemy.isDead) {
               enemy.setVelocity(knockDir * 320, -160);
+              if (!this.isBeast) {
+                enemy.state = 'STAGGERED';
+                enemy.staggerTimer = 1.2;
+              }
             }
           }
         }
       });
     }
 
-    const formTitle = this.isBeast ? '⚔️ DREAD BERSERKER (VOID FRENZY)' : '🛡️ HOLY CRUSADER (BLESSED AEGIS)';
+    const formTitle = this.isBeast ? '⚔️ DREAD BERSERKER (VOID ERUPTION)' : '🛡️ HOLY CRUSADER (AEGIS SANCTUM)';
     EventBus.emit('notification:show', {
-      text: `SWAP: ${formTitle}`,
+      text: `SWAP SKILL: ${formTitle}`,
       color: this.isBeast ? '#ef4444' : '#38bdf8'
     });
-    EventBus.emit('form:swapped', { form: this.activeForm, cooldown: 6.0 });
+    EventBus.emit('form:swapped', { form: this.activeForm, cooldown: 6.0, rank: this.skullRank });
+  }
+
+  getSkillCooldownMax() {
+    const rankReduction = 1.0 - (this.skullRank - 1) * 0.15;
+    const modMult = (this.statMods && this.statMods.skillCooldownMult) || 1.0;
+    const awakenMult = this.isAwakened ? 0.65 : 1.0;
+    return Math.max(1.8, this.baseSkillCooldown * rankReduction * modMult * awakenMult);
+  }
+
+  evolveSkullRank() {
+    if (this.skullRank >= 3) return false;
+    this.skullRank++;
+    EventBus.emit('skull:rank_changed', { rank: this.skullRank });
+    return true;
+  }
+
+  trySkullSkill() {
+    if (this.isDead || !this.active || this.isDashing) return;
+    if (this.skillCooldown > 0) {
+      EventBus.emit('notification:show', {
+        text: `SKILL RECHARGING (${this.skillCooldown.toFixed(1)}s)`,
+        color: '#facc15'
+      });
+      return;
+    }
+
+    const cdMax = this.getSkillCooldownMax();
+    this.skillCooldown = cdMax;
+    const rankMult = 1.0 + (this.skullRank - 1) * 0.25;
+    const dmgMult = (this.statMods.damageMult || 1.0) * rankMult;
+    const dir = this.facing || 1;
+    EventBus.emit('skill:cooldown', { current: cdMax, max: cdMax });
+
+    if (this.isBeast) {
+      // Dread Berserker [Q]: Abyssal Rend — Lunge forward + cleave + Void Crescent
+      this.setVelocityX(dir * 380);
+      this.invulnTimer = Math.max(this.invulnTimer, 0.22);
+      if (this.scene.anims.exists('awakened-kick')) this.anims.play('awakened-kick', true);
+      this.attackAnimTimer = 0.25;
+      try { SoundSynth.playRoar(); } catch (e) { }
+      this.scene.juice.addTrauma(0.45);
+      this.scene.juice.emitBlood(this.x + dir * 24, this.y, 16);
+      this.scene.juice.emitVoidEmbers(this.x + dir * 24, this.y, 18);
+
+      const bounds = new Phaser.Geom.Rectangle(dir > 0 ? this.x - 10 : this.x - 100, this.y - 36, 110, 72);
+      for (const enemy of (this.scene.enemies || [])) {
+        if (!enemy.active || enemy.isDead) continue;
+        if (Phaser.Geom.Intersects.RectangleToRectangle(bounds, enemy.getBounds())) {
+          const dmg = Math.round(62 * dmgMult);
+          enemy.takeDamage(dmg, this.x, true, true);
+          this.applyLifesteal(dmg);
+        }
+      }
+      if (typeof this.scene.spawnVoidWave === 'function') {
+        this.scene.spawnVoidWave(this.x + dir * 32, this.y, dir, Math.round(45 * dmgMult));
+      }
+    } else {
+      // Holy Crusader [Q]: Sanctified Judgement — Twin Holy Arcs + 1.5s Holy Shield
+      this.shieldTimer = Math.max(this.shieldTimer, 1.5);
+      if (this.scene.anims.exists('player-punch')) this.anims.play('player-punch', true);
+      this.attackAnimTimer = 0.25;
+      try { SoundSynth.playHolySmite(); } catch (e) { }
+      this.scene.juice.addTrauma(0.35);
+      this.scene.juice.emitHolySparks(this.x + dir * 20, this.y, 20);
+      if (typeof this.scene.spawnHolyArc === 'function') {
+        this.scene.spawnHolyArc(this.x + dir * 26, this.y - 6, dir, Math.round(42 * dmgMult));
+        this.scene.time.delayedCall(120, () => {
+          if (this.active && !this.isDead && this.scene && typeof this.scene.spawnHolyArc === 'function') {
+            this.scene.spawnHolyArc(this.x + dir * 30, this.y + 4, dir, Math.round(42 * dmgMult));
+          }
+        });
+      }
+    }
+  }
+
+  tryQuintessence() {
+    if (this.isDead || !this.active) return;
+    if (!this.quintessence) {
+      EventBus.emit('notification:show', { text: 'NO QUINTESSENCE EQUIPPED! (DEFEAT BOSSES OR VISIT BAZAAR)', color: '#94a3b8' });
+      return;
+    }
+    if (this.quintessenceCooldown > 0) {
+      EventBus.emit('notification:show', {
+        text: `QUINTESSENCE RECHARGING (${this.quintessenceCooldown.toFixed(1)}s)`,
+        color: '#facc15'
+      });
+      return;
+    }
+
+    const modMult = (this.statMods && this.statMods.skillCooldownMult) || 1.0;
+    const maxCd = Math.round(this.quintessence.cooldown * modMult * 10) / 10;
+    this.quintessenceCooldown = maxCd;
+    EventBus.emit('quintessence:cooldown', { current: maxCd, max: maxCd });
+    const dmgMult = this.statMods.damageMult || 1.0;
+
+    if (this.quintessence.id === 'infernal_eye') {
+      try { SoundSynth.playRoar(); } catch (e) { }
+      this.scene.juice.addTrauma(0.55);
+      const targets = (this.scene.enemies || []).filter(e => e.active && !e.isDead && Math.abs(e.x - this.x) < 420);
+      for (let i = 0; i < 5; i++) {
+        this.scene.time.delayedCall(i * 110, () => {
+          if (!this.scene || !this.active || this.isDead) return;
+          const target = targets[i % Math.max(1, targets.length)];
+          const tx = target ? target.x : (this.x + this.facing * (90 + i * 45));
+          const ty = target ? target.y : this.y;
+          this.scene.juice.emitVoidEmbers(tx, ty, 16);
+          this.scene.juice.emitHolySparks(tx, ty, 10);
+          if (target && target.active && !target.isDead) {
+            target.takeDamage(Math.round(55 * dmgMult), this.x, true, true);
+          }
+        });
+      }
+      EventBus.emit('notification:show', { text: '👁 INFERNAL EYE: ABYSSAL METEOR BARRAGE!', color: '#e879f9' });
+    } else if (this.quintessence.id === 'blood_titan') {
+      try { SoundSynth.playFinisher(); } catch (e) { }
+      this.shieldTimer = Math.max(this.shieldTimer, 3.0);
+      this.heal(20);
+      this.scene.juice.addTrauma(0.65);
+      this.scene.juice.emitSparks(this.x, this.y + 18, 24);
+      for (const enemy of (this.scene.enemies || [])) {
+        if (enemy && enemy.active && !enemy.isDead && Phaser.Math.Distance.Between(this.x, this.y, enemy.x, enemy.y) < 220) {
+          enemy.takeDamage(Math.round(75 * dmgMult), this.x, true, true);
+          enemy.state = 'STAGGERED';
+          enemy.staggerTimer = 1.4;
+        }
+      }
+      EventBus.emit('notification:show', { text: '❤ TITAN HEART: SEISMIC AEGIS & +20 HP!', color: '#f87171' });
+    } else if (this.quintessence.id === 'raven_feather') {
+      try { SoundSynth.playSlash(3); } catch (e) { }
+      this.scene.juice.addTrauma(0.45);
+      const dir = this.facing || 1;
+      for (let i = 0; i < 4; i++) {
+        this.scene.time.delayedCall(i * 90, () => {
+          if (!this.scene || !this.active || this.isDead) return;
+          if (i % 2 === 0 && typeof this.scene.spawnVoidWave === 'function') {
+            this.scene.spawnVoidWave(this.x + dir * 24, this.y - 12 + i * 6, dir, Math.round(45 * dmgMult));
+          } else if (typeof this.scene.spawnHolyArc === 'function') {
+            this.scene.spawnHolyArc(this.x + dir * 24, this.y - 12 + i * 6, dir, Math.round(45 * dmgMult));
+          }
+        });
+      }
+      EventBus.emit('notification:show', { text: '🪶 RAVEN TEMPEST: CRESCENT STORM!', color: '#c084fc' });
+    }
   }
 
   updateAnimation(onFloor) {
@@ -557,8 +766,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.attackCooldown = 0.20 / speedMult;
     this.attackAnimTimer = 0.25 / speedMult;
 
-    if (this.scene.anims.exists('player-punch')) {
-      this.anims.play('player-punch', true);
+    const onFloor = this.body.blocked.down || this.body.touching.down;
+    const animKey = !onFloor
+      ? 'player-flying-kick'
+      : (this.comboStep === 2 ? 'player-kick' : 'player-punch');
+    if (this.scene.anims.exists(animKey)) {
+      this.anims.play(animKey, true);
     }
 
     // Movement direction takes strict priority (never mouse)
@@ -578,23 +791,29 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       SoundSynth.playSlash(this.comboStep);
     }
 
+    this.scene.tweens.killTweensOf(this.slashSprite);
     this.slashSprite.setTexture('slash_knight')
       .setPosition(hitboxX, hitboxY)
       .setFlipX(dir < 0)
+      .setScale(1)
       .setVisible(true)
       .setAlpha(1);
 
     this.scene.tweens.add({
       targets: this.slashSprite,
       alpha: 0,
-      scaleX: 1.2,
+      scaleX: 1.25,
       duration: 150,
-      onComplete: () => this.slashSprite.setVisible(false)
+      onComplete: () => {
+        if (this.slashSprite && this.slashSprite.scene) {
+          this.slashSprite.setVisible(false);
+        }
+      }
     });
 
     let baseDmg = this.comboStep === 3 ? 35 : 20;
     const finalDmg = Math.round(baseDmg * this.statMods.damageMult);
-    this.scene.checkAttackHit(hitboxX, hitboxY, 34, 28, finalDmg, false);
+    this.scene.checkAttackHit(hitboxX, hitboxY, 42, 34, finalDmg, false);
 
     // Relic effect: Sunfire Reliquary (Holy Radiant Arc - strictly on 3rd combo step finisher)
     if (this.comboStep === 3 && this.statMods.holyArcDamage > 0 && typeof this.scene.spawnHolyArc === 'function') {
@@ -679,25 +898,31 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   addCorruption(amount) {
-    if (this.isBeast) {
+    if (this.isAwakened) {
       this.beastTimer = Math.min(this.maxBeastDuration, this.beastTimer + (amount * 0.15));
       return;
     }
+    const prevRounded = Math.round(this.corruption);
     this.corruption = Math.min(100, Math.round((this.corruption + amount) * 10) / 10);
-    try {
-      localStorage.setItem('cursed_crusader_corruption', this.corruption.toString());
-    } catch (e) {}
-
-    EventBus.emit('player:corruption_changed', {
-      current: this.corruption,
-      max: 100,
-      isMax: this.corruption >= 100
-    });
+    const nextRounded = Math.round(this.corruption);
+    if (nextRounded >= 100 && prevRounded < 100) {
+      try {
+        localStorage.setItem('cursed_crusader_corruption', '100');
+      } catch (e) { }
+    }
+    if (nextRounded !== prevRounded || this.corruption >= 100) {
+      EventBus.emit('player:corruption_changed', {
+        current: this.corruption,
+        max: 100,
+        isMax: this.corruption >= 100
+      });
+    }
   }
 
   tryTransform() {
-    if (this.isBeast || this.corruption < 100 || !this.body) return;
+    if (this.isAwakened || this.corruption < 100 || !this.body) return;
 
+    this.isAwakened = true;
     this.isBeast = true;
     this.corruption = 100;
     this.beastTimer = this.maxBeastDuration;
@@ -709,6 +934,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     // Switch to authentic Gothicvania Awakened Dread Berserker spritesheet
     this.setTexture('player-awakened');
+    this.setScale(1.15);
+    this.setTint(0xfca5a5);
     this.body.setSize(26, 50).setOffset(28, 10);
     if (this.scene.anims.exists('awakened-idle')) {
       this.anims.play('awakened-idle');
@@ -737,7 +964,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   tryFinisher() {
-    if (!this.isBeast || this.beastTimer < 2.0) return;
+    if (!this.isAwakened || this.beastTimer < 2.0) return;
 
     SoundSynth.playFinisher();
     this.scene.juice.addTrauma(1.0);
@@ -752,13 +979,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   revertToKnight() {
+    this.isAwakened = false;
     this.isBeast = (this.activeForm === 'berserker');
     this.beastType = this.isBeast ? 'abyssal' : null;
     this.beastTimer = 0;
     this.corruption = 0;
+    this.setScale(1.0);
+    this.clearTint();
     try {
       localStorage.setItem('cursed_crusader_corruption', '0');
-    } catch (e) {}
+    } catch (e) { }
 
     if (this.anims) {
       this.anims.stop();
@@ -777,10 +1007,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   takeDamage(amount, sourceX) {
-    if (this.isDead || this.isDashing || !this.body) return;
+    if (this.isDead || this.isDashing || this.invulnTimer > 0 || !this.body) return;
+    this.invulnTimer = 0.55;
 
     if (this.isBeast) {
-      amount = Math.round(amount * 0.7); // 30% damage reduction in Awakened form!
+      amount = Math.round(amount * 0.7); // 30% damage reduction in Berserker/Awakened form
+    }
+    if (this.shieldTimer > 0) {
+      amount = Math.round(amount * 0.5); // 50% shield reduction from Aegis / Titan Heart
+    }
+    if (this.statMods && this.statMods.damageReduction) {
+      amount = Math.max(1, Math.round(amount * (1 - this.statMods.damageReduction)));
     }
 
     this.hp -= amount;
@@ -829,7 +1066,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.scene.juice.emitBlood(this.x, this.y, 35);
     try {
       localStorage.setItem('cursed_crusader_corruption', '0');
-    } catch (e) {}
+    } catch (e) { }
     EventBus.emit('player:died', {});
   }
 }

@@ -30,10 +30,21 @@ export class SanctuaryScene extends Phaser.Scene {
       strokeThickness: 5
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, 68, 'Offer Blood Quartz to permanently augment your dark vessel', {
+    this.add.text(width / 2, 62, 'Offer Blood Quartz to permanently augment your dark vessel', {
       fontFamily: 'monospace',
       fontSize: '12px',
       color: '#94a3b8'
+    }).setOrigin(0.5);
+
+    // 2b. Lifetime Crusade Ledger (Centered below subtitle — zero overlap)
+    const d = metaProgression.data;
+    this.add.text(width / 2, 82, `RUNS: ${d.totalRuns || 0}  •  BEST CHAMBER: ${d.highestChamber || 1}/12  •  BOSSES SLAIN: ${d.bossesSlain || 0}`, {
+      fontFamily: 'monospace',
+      fontSize: '10px',
+      fontStyle: 'bold',
+      color: '#cbd5e1',
+      stroke: '#05070a',
+      strokeThickness: 3
     }).setOrigin(0.5);
 
     // 3. Blood Quartz Counter (Top Right)
@@ -64,7 +75,7 @@ export class SanctuaryScene extends Phaser.Scene {
     backBtn.on('pointerover', () => backBtn.setColor('#ffffff'));
     backBtn.on('pointerout', () => backBtn.setColor('#fde047'));
     backBtn.on('pointerdown', () => {
-      try { SoundSynth.playHit(); } catch (e) {}
+      try { SoundSynth.playHit(); } catch (e) { }
       this.scene.start('main-menu');
     });
 
@@ -76,10 +87,10 @@ export class SanctuaryScene extends Phaser.Scene {
     this.cards = [];
 
     const startX = 260;
-    const startY = 125;
+    const startY = 138;
     const cardW = 420;
     const cardH = 68;
-    const spacingY = 76;
+    const spacingY = 78;
 
     SANCTUARY_UPGRADES.forEach((upgrade, index) => {
       const col = index % 2;
@@ -97,8 +108,23 @@ export class SanctuaryScene extends Phaser.Scene {
       const bg = this.add.rectangle(0, 0, cardW, cardH, 0x0a0e17)
         .setStrokeStyle(2, isMax ? 0x10b981 : (canAfford ? 0x9333ea : 0x334155));
 
-      // Icon & Name
-      const nameText = this.add.text(-cardW / 2 + 18, -18, `${upgrade.icon} ${upgrade.name}`, {
+      // Icon & Name (Use crisp 16x16 pixel-art icon when available)
+      const iconMap = {
+        unholy_vigor: 4,
+        abyssal_blade: 343,
+        shadow_dash: 66,
+        grave_bounty: 117,
+        alchemist_pouch: 245,
+        corrupted_blood: 129
+      };
+      const hasIcons = this.textures.exists('icons_16x16');
+      let iconObj = null;
+      if (hasIcons && iconMap[upgrade.id] !== undefined) {
+        iconObj = this.add.image(-cardW / 2 + 26, -12, 'icons_16x16', iconMap[upgrade.id]).setScale(1.6);
+      }
+
+      const nameX = hasIcons ? (-cardW / 2 + 44) : (-cardW / 2 + 18);
+      const nameText = this.add.text(nameX, -23, `${upgrade.name}`, {
         fontFamily: 'Cinzel, monospace',
         fontSize: '14px',
         fontStyle: 'bold',
@@ -106,17 +132,18 @@ export class SanctuaryScene extends Phaser.Scene {
       });
 
       // Description
-      const descText = this.add.text(-cardW / 2 + 18, 5, upgrade.desc, {
+      const descText = this.add.text(nameX, -6, upgrade.desc, {
         fontFamily: 'monospace',
-        fontSize: '10px',
-        color: '#94a3b8'
+        fontSize: '9.5px',
+        color: '#94a3b8',
+        wordWrap: { width: 220 }
       });
 
       // Level Pips (Luminous framed slots)
       const pips = [];
       for (let p = 0; p < upgrade.maxLevel; p++) {
         const pipX = -cardW / 2 + 18 + p * 18;
-        const pipY = 16;
+        const pipY = 22;
         const isFilled = p < level;
         const fillCol = isFilled ? (isMax ? 0x10b981 : 0xa855f7) : 0x0f172a;
         const strokeCol = isFilled ? (isMax ? 0x34d399 : 0xc084fc) : 0x334155;
@@ -146,14 +173,16 @@ export class SanctuaryScene extends Phaser.Scene {
         upBtn.on('pointerout', () => upBtn.setColor(btnColor));
         upBtn.on('pointerdown', () => {
           if (metaProgression.purchaseUpgrade(upgrade.id)) {
-            try { SoundSynth.playHolySmite(); } catch (e) {}
+            try { SoundSynth.playHolySmite(); } catch (e) { }
             this.quartzText.setText(`🩸 QUARTZ: ${metaProgression.getBloodQuartz()}`);
             this.renderUpgradeCards();
           }
         });
       }
 
-      card.add([bg, nameText, descText, upBtn, ...pips]);
+      const children = [bg, nameText, descText, upBtn, ...pips];
+      if (iconObj) children.push(iconObj);
+      card.add(children);
       this.cards.push(card);
     });
   }

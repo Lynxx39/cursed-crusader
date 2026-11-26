@@ -11,6 +11,7 @@ export class SpriteFactory {
     this.createGateTextures(scene);
     this.createEnvironmentTextures(scene);
     this.createParticleTextures(scene);
+    this.createCombatUiTextures(scene);
   }
 
   // 1. Holy Knight (Fallback procedural)
@@ -1023,6 +1024,81 @@ export class SpriteFactory {
       ctx.fillStyle = '#b45309'; ctx.fillRect(1, 1, 2, 2);
       ctx.fillStyle = '#d97706'; ctx.fillRect(2, 2, 1, 1);
       scene.textures.addCanvas('part_urn_shard', c);
+    }
+  }
+
+  // 11. Zero-Allocation Combat Glyphs & Telegraph Icon (Pre-baked sprite atlas)
+  static createCombatUiTextures(scene) {
+    if (!scene.textures.exists('dmg_glyphs')) {
+      const patterns = {
+        '0': ['01110', '10001', '10011', '10101', '11001', '10001', '01110'],
+        '1': ['00100', '01100', '00100', '00100', '00100', '00100', '01110'],
+        '2': ['01110', '10001', '00001', '00110', '01000', '10000', '11111'],
+        '3': ['11110', '00001', '00001', '01110', '00001', '00001', '11110'],
+        '4': ['00010', '00110', '01010', '10010', '11111', '00010', '00010'],
+        '5': ['11111', '10000', '11110', '00001', '00001', '10001', '01110'],
+        '6': ['01110', '10000', '11110', '10001', '10001', '10001', '01110'],
+        '7': ['11111', '00001', '00010', '00100', '01000', '01000', '01000'],
+        '8': ['01110', '10001', '10001', '01110', '10001', '10001', '01110'],
+        '9': ['01110', '10001', '10001', '01111', '00001', '00001', '01110'],
+        '+': ['00000', '00100', '00100', '11111', '00100', '00100', '00000'],
+        '-': ['00000', '00000', '00000', '11111', '00000', '00000', '00000'],
+        '!': ['00100', '00100', '00100', '00100', '00100', '00000', '00100']
+      };
+      const chars = Object.keys(patterns);
+      const fw = 12;
+      const fh = 16;
+      const c = document.createElement('canvas');
+      c.width = fw * chars.length;
+      c.height = fh;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+
+      chars.forEach((ch, idx) => {
+        const ox = idx * fw + 1;
+        const oy = 1;
+        const rows = patterns[ch];
+        // 1px dark outline pass
+        ctx.fillStyle = '#05070a';
+        for (let r = 0; r < 7; r++) {
+          for (let col = 0; col < 5; col++) {
+            if (rows[r][col] === '1') {
+              ctx.fillRect(ox + col * 2 - 1, oy + r * 2 - 1, 4, 4);
+            }
+          }
+        }
+        // White foreground pass (tintable in WebGL)
+        ctx.fillStyle = '#ffffff';
+        for (let r = 0; r < 7; r++) {
+          for (let col = 0; col < 5; col++) {
+            if (rows[r][col] === '1') {
+              ctx.fillRect(ox + col * 2, oy + r * 2, 2, 2);
+            }
+          }
+        }
+      });
+
+      const tex = scene.textures.addCanvas('dmg_glyphs', c);
+      chars.forEach((ch, idx) => {
+        tex.add(ch, 0, idx * fw, 0, fw, fh);
+      });
+    }
+
+    if (!scene.textures.exists('icon_telegraph')) {
+      const c = document.createElement('canvas');
+      c.width = 12; c.height = 18;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.fillStyle = '#05070a';
+      ctx.fillRect(3, 1, 6, 10);
+      ctx.fillRect(3, 12, 6, 5);
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(4, 2, 4, 8);
+      ctx.fillRect(4, 13, 4, 3);
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(5, 3, 2, 5);
+      ctx.fillRect(5, 14, 2, 1);
+      scene.textures.addCanvas('icon_telegraph', c);
     }
   }
 }

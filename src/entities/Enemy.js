@@ -6,15 +6,17 @@ import { EventBus } from '../core/EventBus.js';
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y, type = 'ghoul') {
     let texture = 'burning-ghoul';
+    if (type === 'ghoul') texture = 'burning-ghoul';
     if (type === 'cultist') texture = 'wizard';
     if (type === 'elite') texture = 'burning-ghoul';
     if (type === 'bat') texture = 'bat-fly';
     if (type === 'skeleton') texture = 'skeleton';
     if (type === 'sorcerer') texture = 'sorcerer';
+    if (type === 'plague_hound') texture = 'plague_hound';
     if (type === 'general_vane') texture = 'skeleton';
-    if (type === 'belial') texture = 'sorcerer';
+    if (type === 'belial') texture = 'void_seraph';
     if (type === 'malakor') texture = 'sorcerer';
-    if (type === 'cursed_king') texture = 'player-awakened';
+    if (type === 'cursed_king') texture = 'cursed_king';
 
     super(scene, x, y, texture);
     scene.add.existing(this);
@@ -94,6 +96,15 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.body.setSize(30, 44).setOffset(5, 4);
       if (scene.anims.exists('sorcerer-idle')) this.anims.play('sorcerer-idle', true);
       this.castCooldown = 2.8;
+    } else if (type === 'plague_hound') {
+      this.maxHp = Math.round(48 * roomScale);
+      this.hp = this.maxHp;
+      this.speed = Math.round(150 * speedScale);
+      this.damage = Math.round(15 * dmgScale);
+      this.attackRange = 48;
+      this.body.setSize(44, 30).setOffset(10, 14);
+      if (scene.anims.exists('plague-hound-run')) this.anims.play('plague-hound-run', true);
+      this.lungeCooldown = 2.2;
     } else if (type === 'elite') {
       this.maxHp = Math.round(250 * roomScale);
       this.hp = this.maxHp;
@@ -119,7 +130,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.slamCooldown = 4.0;
       this.cleaveCooldown = 2.2;
     } else if (type === 'belial') {
-      // CHAPTER 3 FINAL BOSS: Void Arch-Seraph Belial (Tuned base HP 1650)
+      // CHAPTER 3 BOSS: Void Arch-Seraph Belial
       this.isBoss = true;
       this.isFlying = true;
       this.body.setAllowGravity(false);
@@ -128,10 +139,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.speed = Math.round(95 * speedScale);
       this.damage = Math.round(36 * dmgScale);
       this.attackRange = 400;
-      this.setScale(1.9);
-      this.body.setSize(36, 46).setOffset(2, 2);
-      this.setTint(0x7c3aed); // Royal Void Purple
-      if (scene.anims.exists('sorcerer-idle')) this.anims.play('sorcerer-idle', true);
+      this.setScale(1.3);
+      this.body.setSize(54, 72).setOffset(20, 12);
+      if (scene.anims.exists('void-seraph-hover')) this.anims.play('void-seraph-hover', true);
       this.starfallCooldown = 5.0;
       this.beamCooldown = 6.5;
       this.homeY = y;
@@ -153,17 +163,16 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.soulVolleyCooldown = 3.5;
       this.homeY = y;
     } else if (type === 'cursed_king') {
-      // ACT 4 FINAL CLIMAX BOSS: The Cursed King Aldous & Void Primordial Heart (Chamber 12)
+      // ACT 4 FINAL CLIMAX BOSS: The Cursed King Aldous (Chamber 12)
       this.isBoss = true;
       this.maxHp = Math.round(2800 * roomScale);
       this.hp = this.maxHp;
       this.speed = Math.round(105 * speedScale);
       this.damage = Math.round(42 * dmgScale);
       this.attackRange = 95;
-      this.setScale(2.0);
-      this.body.setSize(36, 52).setOffset(22, 6);
-      this.setTint(0xf59e0b); // Corrupted Crown Gold
-      if (scene.anims.exists('awakened-walk')) this.anims.play('awakened-walk', true);
+      this.setScale(1.35);
+      this.body.setSize(48, 76).setOffset(24, 16);
+      if (scene.anims.exists('cursed-king-idle')) this.anims.play('cursed-king-idle', true);
       this.kingSlashCooldown = 2.0;
       this.kingNovaCooldown = 5.0;
       this.kingTeleportCooldown = 4.0;
@@ -187,11 +196,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this.enemyType === 'general_vane') {
       this.setTint(this.bossPhase === 2 ? 0xdc2626 : 0x334155);
     } else if (this.enemyType === 'belial') {
-      this.setTint(this.bossPhase === 2 ? 0xef4444 : 0x7c3aed);
+      if (this.bossPhase === 2) this.setTint(0xef4444);
+      else this.clearTint();
     } else if (this.enemyType === 'malakor') {
       this.setTint(this.bossPhase === 2 ? 0x059669 : 0x10b981);
     } else if (this.enemyType === 'cursed_king') {
-      this.setTint(this.bossPhase === 2 ? 0xdc2626 : 0xf59e0b);
+      if (this.bossPhase === 2) this.setTint(0xdc2626);
+      else this.clearTint();
     } else if (this.isBoss) {
       this.setTint(this.bossPhase === 2 ? 0xff0044 : 0xef4444);
     } else if (this.enemyType === 'elite') {
@@ -254,12 +265,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const dir = player.x > this.x ? 1 : -1;
     const onFloor = this.body.blocked.down || this.body.touching.down;
 
-    // Face player
-    if (this.enemyType === 'cultist' || this.enemyType === 'bat' || this.enemyType === 'sorcerer' || this.enemyType === 'belial') {
-      this.setFlipX(dir < 0);
-    } else {
-      this.setFlipX(dir > 0);
-    }
+    // Face player (all enemy/boss spritesheets natively face LEFT)
+    this.setFlipX(dir > 0);
 
     // ==========================================
     // BOSS 1: HIGH INQUISITOR MALAKOR (Cultist Boss)
@@ -536,6 +543,20 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         return;
       }
 
+      // Void Nova Spiral when kingNovaCooldown reaches 0
+      if (this.kingNovaCooldown <= 0 && this.state === 'CHASE') {
+        this.kingNovaCooldown = this.bossPhase === 2 ? 4.2 : 6.5;
+        const projCount = this.bossPhase === 2 ? 10 : 6;
+        for (let i = 0; i < projCount; i++) {
+          const angle = (i / projCount) * Math.PI * 2;
+          const vx = Math.cos(angle) * 210;
+          const vy = Math.sin(angle) * 210;
+          this.scene.spawnEnemyProjectile(this.x, this.y, vx > 0 ? 1 : -1, this.damage * 0.65, vy, Math.abs(vx), 0xf59e0b);
+        }
+        this.scene.juice.emitVoidEmbers(this.x, this.y, 18);
+        try { SoundSynth.playRoar(); } catch (e) {}
+      }
+
       // Ground Void Shockwave Slash
       if (this.kingSlashCooldown <= 0 && this.state === 'CHASE' && dist < 120 && onFloor) {
         this.kingSlashCooldown = this.bossPhase === 2 ? 2.2 : 3.5;
@@ -674,6 +695,20 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
+    // Plague Hound Shadow Dash Lunge Check
+    if (this.enemyType === 'plague_hound') {
+      if (this.lungeCooldown > 0) this.lungeCooldown -= dt;
+      if (this.state === 'CHASE' && dist >= 70 && dist <= 240 && this.lungeCooldown <= 0 && onFloor) {
+        this.lungeCooldown = 3.2;
+        this.state = 'POUNCE_TELEGRAPH';
+        this.telegraphTimer = 0.25;
+        this.setVelocityX(0);
+        this.setTint(0xc084fc);
+        this.showTelegraphWarning();
+        return;
+      }
+    }
+
     // State Machine execution
     if (this.state === 'POUNCE_TELEGRAPH') {
       this.setVelocityX(0);
@@ -754,7 +789,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         this.performAttack(player);
       } else if (dist <= this.attackRange && this.attackCooldown > 0) {
         this.setVelocityX(0);
-        this.setTint(0xef4444);
+        if (!this.isShieldGuarding) this.setTint(0xef4444);
         if (this.enemyType === 'cultist' && this.scene.anims.exists('wizard-fire')) {
           this.anims.play('wizard-fire', true);
         }
@@ -769,10 +804,14 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
           this.setVelocityX(dir * this.speed);
           if (this.enemyType === 'ghoul' || this.enemyType === 'elite') {
             if (this.scene.anims.exists('ghoul-run')) this.anims.play('ghoul-run', true);
+          } else if (this.enemyType === 'plague_hound') {
+            if (this.scene.anims.exists('plague-hound-run')) this.anims.play('plague-hound-run', true);
           } else if (this.enemyType === 'skeleton' || this.enemyType === 'general_vane') {
             if (this.scene.anims.exists('skeleton-walk')) this.anims.play('skeleton-walk', true);
           } else if (this.enemyType === 'cultist') {
             if (this.scene.anims.exists('wizard-idle')) this.anims.play('wizard-idle', true);
+          } else if (this.enemyType === 'cursed_king') {
+            if (this.scene.anims.exists('cursed-king-idle')) this.anims.play('cursed-king-idle', true);
           }
         }
       }
@@ -780,24 +819,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   showTelegraphWarning() {
-    if (!this.scene || !this.active) return;
-    const warn = this.scene.add.text(this.x, this.y - 36, '!', {
-      fontFamily: 'monospace',
-      fontSize: '20px',
-      fontStyle: 'bold',
-      color: '#ef4444',
-      stroke: '#000000',
-      strokeThickness: 4
-    }).setOrigin(0.5).setDepth(20);
-
-    this.scene.tweens.add({
-      targets: warn,
-      y: this.y - 48,
-      alpha: 0,
-      scale: 1.5,
-      duration: 400,
-      onComplete: () => warn.destroy()
-    });
+    if (!this.scene || !this.active || !this.scene.juice) return;
+    if (typeof this.scene.juice.emitTelegraph === 'function') {
+      this.scene.juice.emitTelegraph(this.x, this.y);
+    }
   }
 
   executeCultistTeleport(player) {
@@ -851,11 +876,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (!this.active || !this.body || this.isDead) return;
     this.state = 'ATTACK';
     const dir = player.x > this.x ? 1 : -1;
-    if (this.enemyType === 'cultist' || this.enemyType === 'bat' || this.enemyType === 'sorcerer' || this.enemyType === 'belial') {
-      this.setFlipX(dir < 0);
-    } else {
-      this.setFlipX(dir > 0);
-    }
+    this.setFlipX(dir > 0);
 
     // Check if player parries this strike!
     if (this.enemyType !== 'cultist' && this.enemyType !== 'sorcerer' && player.isParrying && Math.abs(player.x - this.x) < 85) {
@@ -911,6 +932,34 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     });
   }
 
+  applyBleed(ticks = 3, dmgPerTick = 8) {
+    if (this.isDead || !this.active || !this.scene || this.isBleedActive) return;
+    this.isBleedActive = true;
+    let remaining = ticks;
+    const bleedEvent = this.scene.time.addEvent({
+      delay: 750,
+      repeat: ticks - 1,
+      callback: () => {
+        if (!this.scene || !this.active || this.isDead) {
+          bleedEvent.remove();
+          return;
+        }
+        remaining--;
+        this.hp -= dmgPerTick;
+        this.scene.juice.emitBlood(this.x, this.y, 6);
+        this.scene.juice.popDamageNumber(this.x, this.y - 12, dmgPerTick, 'beast');
+        if (this.isBoss) {
+          EventBus.emit('boss:hp_changed', { current: Math.max(0, this.hp), max: this.maxHp });
+        }
+        if (this.hp <= 0) {
+          this.die();
+        } else if (remaining <= 0) {
+          this.isBleedActive = false;
+        }
+      }
+    });
+  }
+
   takeDamage(amount, sourceX = 0, isCrit = false, isBeast = false) {
     if (this.isDead || !this.active) return;
 
@@ -926,6 +975,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
 
     this.hp -= amount;
+    if (this.isBoss) {
+      EventBus.emit('boss:hp_changed', { current: Math.max(0, this.hp), max: this.maxHp });
+    }
     this.scene.juice.emitBlood(this.x, this.y, isCrit ? 18 : 8);
     this.scene.juice.popDamageNumber(this.x, this.y, amount, isCrit ? 'crit' : (isBeast ? 'beast' : 'normal'));
 
@@ -943,7 +995,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
     this.setTint(0xffffff);
     this.scene.time.delayedCall(80, () => {
-      if (this.active && !this.isDead) {
+      if (this.scene && this.active && !this.isDead) {
         this.restoreTint();
       }
     });

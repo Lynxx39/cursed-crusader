@@ -10,7 +10,11 @@ export class BreakableProp extends Phaser.Physics.Arcade.Sprite {
 
     this.propType = type;
     this.isBroken = false;
-    this.body.setSize(22, 26).setOffset(1, 2);
+    if (type === 'prop_coffin' || type === 'prop_chest') {
+      this.body.setSize(30, 40).setOffset(9, 6);
+    } else {
+      this.body.setSize(22, 26).setOffset(1, 2);
+    }
   }
 
   shatter(sourceX = 0, isBeast = false) {
@@ -19,8 +23,8 @@ export class BreakableProp extends Phaser.Physics.Arcade.Sprite {
 
     // Juice feedback
     if (this.scene && this.scene.juice) {
-      this.scene.juice.emitUrnShards(this.x, this.y, 12);
-      this.scene.juice.addTrauma(0.12);
+      this.scene.juice.emitUrnShards(this.x, this.y, this.propType === 'urn_clay' ? 12 : 18);
+      this.scene.juice.addTrauma(this.propType === 'prop_chest' ? 0.28 : 0.14);
     }
 
     try {
@@ -29,16 +33,38 @@ export class BreakableProp extends Phaser.Physics.Arcade.Sprite {
       SoundSynth.playHit();
     }
 
-    // Spawn rewards (80% gold coin, 20% blood orb)
     if (this.scene) {
-      const dropRoll = Math.random();
-      if (dropRoll < 0.75) {
-        if (typeof this.scene.spawnGoldCoin === 'function') {
-          this.scene.spawnGoldCoin(this.x, this.y - 12);
+      if (this.propType === 'prop_chest') {
+        for (let i = 0; i < 4; i++) {
+          if (typeof this.scene.spawnGoldCoin === 'function') {
+            this.scene.spawnGoldCoin(this.x + (i * 12 - 18), this.y - 16);
+          }
+        }
+        if (typeof this.scene.spawnBloodQuartz === 'function') {
+          this.scene.spawnBloodQuartz(this.x, this.y - 20, 3);
+        }
+        if (typeof this.scene.spawnBloodOrb === 'function') {
+          this.scene.spawnBloodOrb(this.x + 10, this.y - 16);
+        }
+      } else if (this.propType === 'prop_coffin') {
+        for (let i = 0; i < 2; i++) {
+          if (typeof this.scene.spawnGoldCoin === 'function') {
+            this.scene.spawnGoldCoin(this.x + (i * 14 - 7), this.y - 12);
+          }
+        }
+        if (Math.random() < 0.45 && typeof this.scene.spawnBloodOrb === 'function') {
+          this.scene.spawnBloodOrb(this.x, this.y - 14);
         }
       } else {
-        if (typeof this.scene.spawnBloodOrb === 'function') {
-          this.scene.spawnBloodOrb(this.x, this.y - 12);
+        const dropRoll = Math.random();
+        if (dropRoll < 0.75) {
+          if (typeof this.scene.spawnGoldCoin === 'function') {
+            this.scene.spawnGoldCoin(this.x, this.y - 12);
+          }
+        } else {
+          if (typeof this.scene.spawnBloodOrb === 'function') {
+            this.scene.spawnBloodOrb(this.x, this.y - 12);
+          }
         }
       }
     }

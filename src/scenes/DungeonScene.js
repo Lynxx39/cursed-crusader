@@ -4,7 +4,7 @@ import { Player } from '../entities/Player.js';
 import { Enemy } from '../entities/Enemy.js';
 import { BreakableProp } from '../entities/BreakableProp.js';
 import { JuiceEngine } from '../systems/JuiceEngine.js';
-import { RelicSystem } from '../systems/RelicSystem.js';
+import { RelicSystem, QUINTESSENCE_DATABASE } from '../systems/RelicSystem.js';
 import { SpriteFactory } from '../core/SpriteFactory.js';
 import { SoundSynth } from '../core/SoundSynth.js';
 import { EventBus } from '../core/EventBus.js';
@@ -20,20 +20,26 @@ export class DungeonScene extends Phaser.Scene {
     let localGold = 0;
     let localRelics = [];
     let localCorr = 0;
+    let localQuint = null;
+    let localRank = 1;
     try {
       localGold = Number(localStorage.getItem('cursed_crusader_gold')) || 0;
       localCorr = Number(localStorage.getItem('cursed_crusader_corruption')) || 0;
+      localQuint = localStorage.getItem('cursed_crusader_quintessence') || null;
+      localRank = Number(localStorage.getItem('cursed_crusader_skull_rank')) || 1;
       const stored = localStorage.getItem('cursed_crusader_relics');
       if (stored) {
         localRelics = JSON.parse(stored);
       }
-    } catch (e) {}
+    } catch (e) { }
 
     this.gold = data.gold !== undefined ? Number(data.gold) : localGold;
     this.savedRelics = (data.relics && data.relics.length > 0) ? data.relics : localRelics;
     this.savedHp = (data.hp !== undefined && !isNaN(data.hp) && Number(data.hp) > 0) ? Number(data.hp) : 150;
     this.savedCorruption = data.corruption !== undefined ? Number(data.corruption) : localCorr;
     this.savedPotions = data.potions;
+    this.savedQuintessence = data.quintessence !== undefined ? data.quintessence : localQuint;
+    this.savedSkullRank = data.skullRank !== undefined ? Number(data.skullRank) : localRank;
     this.isTransitioning = false;
   }
 
@@ -83,14 +89,40 @@ export class DungeonScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, WORLD_W, WORLD_H);
     this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
 
-    // 4. Ultra-Fast Viewport-Clipped Parallax Backgrounds (Eliminates GPU fill-rate lag)
-    if (this.textures.exists('bg-gothic')) {
-      this.bgBack = this.add.tileSprite(0, 0, 960, 540, 'bg-gothic').setOrigin(0, 0).setScrollFactor(0);
-      this.bgBack.setScale(1.8, 1.8);
+    // 4. Ultra-Fast Viewport-Clipped Parallax Backgrounds (7 Distinct Skul-Inspired Biomes!)
+    const room = this.currentRoom;
+    this.bgBack = null;
+    this.bgGraveyard = null;
+    this.bgColumns = null;
+
+    if (room === 1 && this.textures.exists('bg-forest')) {
+      this.bgBack = this.add.tileSprite(0, 0, 960, 540, 'bg-forest').setOrigin(0, 0).setScrollFactor(0);
+    } else if ((room === 5 || room === 6) && this.textures.exists('bg-black-lab')) {
+      this.bgBack = this.add.tileSprite(0, 0, 960, 540, 'bg-black-lab').setOrigin(0, 0).setScrollFactor(0);
+    } else if ((room === 7 || room === 8) && this.textures.exists('bg-fortress')) {
+      this.bgBack = this.add.tileSprite(0, 0, 960, 540, 'bg-fortress').setOrigin(0, 0).setScrollFactor(0);
+    } else if ((room === 10 || room === 11) && this.textures.exists('bg-sacred-grounds')) {
+      this.bgBack = this.add.tileSprite(0, 0, 960, 540, 'bg-sacred-grounds').setOrigin(0, 0).setScrollFactor(0);
+    } else if ((room === 9 || room === 12) && this.textures.exists('bg-throne')) {
+      this.bgBack = this.add.tileSprite(0, 0, 960, 540, 'bg-throne').setOrigin(0, 0).setScrollFactor(0);
+      if (room === 9) this.bgBack.setTint(0xfda4af);
+      else this.bgBack.setTint(0xddd6fe);
+    } else if (this.textures.exists('bg-gothic')) {
+      this.bgBack = this.add.tileSprite(0, 0, 400, 224, 'bg-gothic').setOrigin(0, 0).setScrollFactor(0).setScale(2.42);
+      if (room === 4) this.bgBack.setTint(0x6ee7b7).setAlpha(0.55);
     }
-    if (this.textures.exists('bg-columns')) {
-      this.bgColumns = this.add.tileSprite(0, 0, 960, 540, 'bg-columns').setOrigin(0, 0).setScrollFactor(0).setAlpha(0.75);
-      this.bgColumns.setScale(1.5, 1.5);
+
+    if (room === 4 && this.textures.exists('bg-graveyard')) {
+      this.bgGraveyard = this.add.tileSprite(0, 294, 480, 123, 'bg-graveyard')
+        .setOrigin(0, 0).setScrollFactor(0).setScale(2).setAlpha(0.8);
+    }
+
+    const useColumns = (room === 2 || room === 3 || room === 4 || room === 9 || room === 12);
+    if (useColumns && this.textures.exists('bg-columns')) {
+      this.bgColumns = this.add.tileSprite(0, 0, 400, 224, 'bg-columns').setOrigin(0, 0).setScrollFactor(0).setScale(2.42).setAlpha(0.75);
+      if (room === 4) this.bgColumns.setTint(0x99f6e4);
+      else if (room === 9) this.bgColumns.setTint(0xfecaca);
+      else if (room === 12) this.bgColumns.setTint(0xc4b5fd);
     }
 
     // 4b. Atmospheric Cathedral Dust Motes (Adds gothic depth to upper ceiling)
@@ -117,6 +149,10 @@ export class DungeonScene extends Phaser.Scene {
     this.player = new Player(this, 120, 480, this.savedHp, this.savedCorruption);
     this.physics.add.collider(this.player, this.platforms);
 
+    // Shared Group Colliders (eliminates per-entity collider leaks!)
+    this.physics.add.collider(this.pickups, this.platforms);
+    this.physics.add.collider(this.enemyGroup, this.platforms);
+
     // Hazard spikes collision
     this.physics.add.overlap(this.player, this.hazards, (player, hazard) => this.onPlayerHitHazard(hazard));
     this.physics.add.overlap(this.enemyGroup, this.hazards, (objA, objB) => {
@@ -124,26 +160,34 @@ export class DungeonScene extends Phaser.Scene {
       if (!enemy || !enemy.active || enemy.isDead) return;
       this.juice.emitBlood(enemy.x, enemy.y, 24);
       this.juice.addTrauma(0.25);
-      try { SoundSynth.playHit(); } catch (e) {}
+      try { SoundSynth.playHit(); } catch (e) { }
       enemy.die();
     });
 
     // 7. Setup Slash & Projectile Textures
     SpriteFactory.createSlashTextures(this);
 
-    // 8. Setup Relics & Synergies
+    // 8. Setup Relics, Quintessence, & Synergies
     this.relicSystem = new RelicSystem(this.player);
     this.savedRelics.forEach(r => this.relicSystem.addRelic(r));
+    if (this.savedQuintessence) {
+      this.relicSystem.equipQuintessence(this.savedQuintessence);
+    }
 
     // Listen for Relic selection from Skul choice modal (clean up old listener first)
+    this.awaitingRelicChoice = false;
+    this.relicModalSource = 'gate';
     if (this.onRelicSelectedHandler) {
       EventBus.off('relic:selected', this.onRelicSelectedHandler);
     }
     this.onRelicSelectedHandler = (chosenRelic) => {
+      this.awaitingRelicChoice = false;
       if (chosenRelic && chosenRelic.id) {
         this.relicSystem.addRelic(chosenRelic);
       }
-      this.proceedToNextRoom();
+      if (this.relicModalSource === 'gate') {
+        this.proceedToNextRoom();
+      }
     };
     EventBus.on('relic:selected', this.onRelicSelectedHandler);
 
@@ -219,9 +263,9 @@ export class DungeonScene extends Phaser.Scene {
 
     if (this.isShopChamber) {
       this.roomCleared = true;
-      EventBus.emit('room:cleared');
       EventBus.emit('enemies:count', 0);
       this.spawnGateways();
+      if (this.exitSign) this.exitSign.setVisible(true);
     } else if (this.isBossChamber) {
       this.spawnBossEncounter();
     } else {
@@ -242,8 +286,8 @@ export class DungeonScene extends Phaser.Scene {
       padding: { x: 9, y: 5 }
     }).setOrigin(0.5).setVisible(false).setDepth(35);
 
-    const exitSignX = this.isShopChamber ? 1180 : (this.isBossChamber ? 1200 : 4490);
-    const exitSignY = this.isShopChamber ? 200 : (this.isBossChamber ? 140 : 250);
+    const exitSignX = this.isShopChamber ? 1180 : (this.isBossChamber ? 1200 : 5410);
+    const exitSignY = this.isShopChamber ? 200 : (this.isBossChamber ? 140 : 245);
     this.exitSign = this.add.text(exitSignX, exitSignY, '✦ GATES OF DESTINY: CHOOSE THY PATH ✦', {
       fontFamily: 'monospace', fontSize: '13px', fontStyle: 'bold', color: '#34d399',
       stroke: '#05070a', strokeThickness: 4, backgroundColor: 'rgba(5, 7, 10, 0.9)',
@@ -263,8 +307,12 @@ export class DungeonScene extends Phaser.Scene {
     this.onEnemyKilledHandler = ({ enemy }) => {
       this.enemies = this.enemies.filter(e => e !== enemy && e.active && !e.isDead);
       EventBus.emit('enemies:count', this.enemies.length);
-      if (this.isBossChamber) {
+      if (this.isBossChamber && enemy && enemy.isBoss) {
         EventBus.emit('boss:hp_changed', { current: Math.max(0, enemy.hp), max: enemy.maxHp });
+      }
+      if (this.player && !this.player.isDead && this.player.statMods && this.player.statMods.crimsonCarnage) {
+        this.player.heal(8);
+        this.player.frenzyTimer = Math.max(this.player.frenzyTimer || 0, 3.0);
       }
 
       if (this.enemies.length === 0 && !this.roomCleared) {
@@ -301,6 +349,13 @@ export class DungeonScene extends Phaser.Scene {
     EventBus.emit('enemies:count', this.enemies.length);
     EventBus.emit('player:hp_changed', { current: this.player.hp, max: this.player.maxHp });
     EventBus.emit('player:corruption_changed', { current: this.player.corruption, max: 100, isMax: this.player.corruption >= 100 });
+    EventBus.emit('skull:rank_changed', { rank: this.player.skullRank });
+    EventBus.emit('skill:cooldown', { current: 0, max: this.player.getSkillCooldownMax() });
+    if (this.relicSystem && this.relicSystem.equippedQuintessence) {
+      EventBus.emit('quintessence:equipped', { quintessence: this.relicSystem.equippedQuintessence, synergies: this.relicSystem.inscriptionCounts });
+    } else {
+      EventBus.emit('quintessence:equipped', { quintessence: null, synergies: {} });
+    }
   }
 
   buildExpansiveLevel(worldW, worldH) {
@@ -314,11 +369,10 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   buildBossArena(worldW, worldH) {
-    // 1. Visual tiles (no physics bodies on individual tiles)
-    for (let x = 0; x < worldW; x += 32) {
-      this.add.image(x + 16, 560, 'tile_floor').setDepth(2);
-      this.add.image(x + 16, 592, 'tile_foundation').setDepth(2);
-    }
+    // 1. TileSprite continuous floor strips (2 GPU quads instead of 150!)
+    this.add.rectangle(worldW / 2, 608, worldW, 80, 0x05070a).setDepth(1);
+    this.add.tileSprite(worldW / 2, 560, worldW, 32, 'tile_floor').setDepth(2);
+    this.add.tileSprite(worldW / 2, 592, worldW, 32, 'tile_foundation').setDepth(2);
     // Single unified continuous floor collider
     const floorCollider = this.platforms.create(worldW / 2, 560, 'tile_floor');
     floorCollider.setVisible(false);
@@ -351,8 +405,8 @@ export class DungeonScene extends Phaser.Scene {
     this.createTorch(1300, 230);
     this.createTorch(1900, 410);
 
-    // Decorative Dragon Bones for Chapter 2 Boss Arena (General Vane)
-    if (this.currentRoom === 8) {
+    // Decorative Dragon Bones for Act 1 Boss Arena (General Vane - Chamber 3)
+    if (this.currentRoom === 3) {
       if (this.textures.exists('dragon_bones_head')) {
         this.add.image(1120, 510, 'dragon_bones_head').setScale(1.2).setDepth(2).setAlpha(0.85);
       }
@@ -362,17 +416,26 @@ export class DungeonScene extends Phaser.Scene {
       }
     }
 
+    // Royal Banners & Candelabras in Boss Arenas
+    if (this.textures.exists('prop_gothic_banner')) {
+      this.add.image(400, 385, 'prop_gothic_banner').setDepth(2).setAlpha(0.9);
+      this.add.image(1840, 385, 'prop_gothic_banner').setDepth(2).setAlpha(0.9);
+    }
+    if (this.textures.exists('prop_candelabra')) {
+      this.add.image(980, 522, 'prop_candelabra').setDepth(3);
+      this.add.image(1420, 522, 'prop_candelabra').setDepth(3);
+    }
+
     // Breakable Urns in arena corners
     this.createUrn(450, 414);
     this.createUrn(1850, 414);
   }
 
   buildShopChamber(worldW, worldH) {
-    // 1. Visual tiles
-    for (let x = 0; x < worldW; x += 32) {
-      this.add.image(x + 16, 560, 'tile_floor').setDepth(2);
-      this.add.image(x + 16, 592, 'tile_foundation').setDepth(2);
-    }
+    // 1. TileSprite continuous floor strips & solid subterranean backing
+    this.add.rectangle(worldW / 2, 628, worldW, 104, 0x05070a).setDepth(1);
+    this.add.tileSprite(worldW / 2, 560, worldW, 32, 'tile_floor').setDepth(2);
+    this.add.tileSprite(worldW / 2, 592, worldW, 32, 'tile_foundation').setDepth(2);
     // Single unified continuous floor collider
     const floorCollider = this.platforms.create(worldW / 2, 560, 'tile_floor');
     floorCollider.setVisible(false);
@@ -392,36 +455,38 @@ export class DungeonScene extends Phaser.Scene {
     rightBound.setDisplaySize(32, worldH);
     rightBound.refreshBody();
 
-    // The Hooded Collector Market Stall
+    // The Hooded Collector NPC & Market Stall
+    if (this.textures.exists('collector_npc')) {
+      const collector = this.add.sprite(405, 508, 'collector_npc').setScale(1.15).setDepth(4);
+      if (this.anims.exists('collector-idle')) collector.anims.play('collector-idle');
+    }
     if (this.textures.exists('prop_market_stall')) {
-      this.add.image(520, 480, 'prop_market_stall').setScale(1.6).setDepth(3);
+      this.add.image(475, 480, 'prop_market_stall').setScale(1.6).setDepth(3);
     }
     if (this.textures.exists('prop_soul_lantern')) {
-      this.add.image(380, 510, 'prop_soul_lantern').setDepth(3);
-      this.add.image(660, 510, 'prop_soul_lantern').setDepth(3);
-    }
-    if (this.textures.exists('prop_chest')) {
-      this.add.image(860, 535, 'prop_chest').setScale(1.1).setDepth(3);
+      this.add.image(210, 510, 'prop_soul_lantern').setDepth(3);
+      this.add.image(710, 510, 'prop_soul_lantern').setDepth(3);
     }
     if (this.textures.exists('prop_coffin')) {
-      this.add.image(200, 530, 'prop_coffin').setScale(1.1).setDepth(3);
+      const coffin = new BreakableProp(this, 145, 524, 'prop_coffin');
+      this.props.add(coffin);
     }
 
     // Atmospheric Lantern Glows
-    this.createTorch(380, 480);
-    this.createTorch(660, 480);
+    this.createTorch(210, 480);
+    this.createTorch(710, 480);
 
     // Shopkeeper Title Banner
-    this.add.text(520, 395, '✦ THE HOODED COLLECTOR\'S BAZAAR ✦', {
+    this.add.text(475, 385, '✦ THE HOODED COLLECTOR\'S BAZAAR ✦', {
       fontFamily: 'Cinzel, monospace', fontSize: '13px', fontStyle: 'bold', color: '#facc15',
       stroke: '#05070a', strokeThickness: 4, backgroundColor: 'rgba(5, 7, 10, 0.9)',
       padding: { x: 12, y: 5 }
     }).setOrigin(0.5).setDepth(20);
 
     // Item 1: Restorative Health Potion
-    const item1 = this.add.sprite(360, 520, 'potion-red').setScale(1.8).setDepth(5).setInteractive({ useHandCursor: true });
+    const item1 = this.add.sprite(300, 520, 'potion-red').setScale(1.8).setDepth(5).setInteractive({ useHandCursor: true });
     if (this.anims.exists('potion-red-glow')) item1.anims.play('potion-red-glow');
-    this.add.text(360, 480, '[CLICK / E]\nHEALTH POTION\n50 GOLD', {
+    this.add.text(300, 476, '[CLICK / E]\nHEALTH POTION\n50 GOLD', {
       fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#4ade80',
       align: 'center', stroke: '#000', strokeThickness: 3
     }).setOrigin(0.5).setDepth(20);
@@ -437,8 +502,8 @@ export class DungeonScene extends Phaser.Scene {
         this.player.potions = Math.min(this.player.maxPotions, this.player.potions + 1);
         this.player.heal(50);
         EventBus.emit('potion:changed', { current: this.player.potions, max: this.player.maxPotions });
-        try { SoundSynth.playBloodOrb(); } catch (e) {}
-        this.juice.emitHolySparks(360, 520, 16);
+        try { SoundSynth.playHeal(); } catch (e) { }
+        this.juice.emitHolySparks(300, 520, 16);
         EventBus.emit('notification:show', { text: 'BOUGHT: HEALTH POTION (+1 POTION & +50 HP)', color: '#4ade80' });
       } else {
         EventBus.emit('notification:show', { text: 'NOT ENOUGH GOLD! (NEED 50)', color: '#ef4444' });
@@ -446,13 +511,13 @@ export class DungeonScene extends Phaser.Scene {
     };
 
     item1.on('pointerdown', () => {
-      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, 360, 520) < 220) buyHealthPotion();
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, 300, 520) < 220) buyHealthPotion();
     });
 
     // Item 2: Purple Abyssal Elixir
-    const item2 = this.add.sprite(680, 520, 'potion-purple').setScale(1.8).setDepth(5).setInteractive({ useHandCursor: true });
+    const item2 = this.add.sprite(615, 520, 'potion-purple').setScale(1.8).setDepth(5).setInteractive({ useHandCursor: true });
     if (this.anims.exists('potion-purple-glow')) item2.anims.play('potion-purple-glow');
-    this.add.text(680, 480, '[CLICK / E]\nABYSSAL ELIXIR\n40 GOLD', {
+    this.add.text(615, 476, '[CLICK / E]\nABYSSAL ELIXIR\n40 GOLD', {
       fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#c084fc',
       align: 'center', stroke: '#000', strokeThickness: 3
     }).setOrigin(0.5).setDepth(20);
@@ -463,8 +528,8 @@ export class DungeonScene extends Phaser.Scene {
         EventBus.emit('gold:changed', this.gold);
         this.player.addCorruption(35);
         this.player.frenzyTimer = 20;
-        try { SoundSynth.playRoar(); } catch (e) {}
-        this.juice.emitVoidEmbers(680, 520, 20);
+        try { SoundSynth.playRoar(); } catch (e) { }
+        this.juice.emitVoidEmbers(615, 520, 20);
         EventBus.emit('notification:show', { text: 'BOUGHT: ABYSSAL ELIXIR (+35% CORRUPT & 20s FRENZY)', color: '#c084fc' });
       } else {
         EventBus.emit('notification:show', { text: 'NOT ENOUGH GOLD! (NEED 40)', color: '#ef4444' });
@@ -472,12 +537,12 @@ export class DungeonScene extends Phaser.Scene {
     };
 
     item2.on('pointerdown', () => {
-      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, 680, 520) < 220) buyAbyssalElixir();
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, 615, 520) < 220) buyAbyssalElixir();
     });
 
     // Item 3: Mystery Relic Casket
-    const item3 = this.add.sprite(860, 520, 'prop_chest').setScale(1.2).setDepth(5).setInteractive({ useHandCursor: true });
-    this.add.text(860, 480, '[CLICK / E]\nRELIC CASKET\n110 GOLD', {
+    const item3 = this.add.sprite(785, 520, 'prop_chest').setScale(1.15).setDepth(5).setInteractive({ useHandCursor: true });
+    this.add.text(785, 476, '[CLICK / E]\nRELIC CASKET\n110 GOLD', {
       fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#facc15',
       align: 'center', stroke: '#000', strokeThickness: 3
     }).setOrigin(0.5).setDepth(20);
@@ -490,8 +555,10 @@ export class DungeonScene extends Phaser.Scene {
         casketOpened = true;
         EventBus.emit('gold:changed', this.gold);
         item3.setTint(0x475569);
-        try { SoundSynth.playSlash(3); } catch (e) {}
-        this.juice.emitSparks(860, 520, 25);
+        try { SoundSynth.playSlash(3); } catch (e) { }
+        this.juice.emitSparks(785, 520, 25);
+        this.awaitingRelicChoice = true;
+        this.relicModalSource = 'shop';
         const choices = this.relicSystem.getThreeRandomChoices();
         EventBus.emit('relic:choose_options', choices);
       } else {
@@ -500,40 +567,106 @@ export class DungeonScene extends Phaser.Scene {
     };
 
     item3.on('pointerdown', () => {
-      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, 860, 520) < 220) buyRelicCasket();
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, 785, 520) < 220) buyRelicCasket();
+    });
+
+    // Item 4: Emerald Venom / Haste Tonic (uses potion-green)
+    const item4 = this.add.sprite(900, 520, 'potion-green').setScale(1.8).setDepth(5).setInteractive({ useHandCursor: true });
+    if (this.anims.exists('potion-green-glow')) item4.anims.play('potion-green-glow');
+    this.add.text(900, 476, '[CLICK / E]\nBLESSED TONIC\n65 GOLD', {
+      fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#34d399',
+      align: 'center', stroke: '#000', strokeThickness: 3
+    }).setOrigin(0.5).setDepth(20);
+
+    let tonicBought = false;
+    const buyBlessedTonic = () => {
+      if (tonicBought) {
+        EventBus.emit('notification:show', { text: 'BLESSED TONIC ALREADY CONSUMED!', color: '#94a3b8' });
+        return;
+      }
+      if (this.gold >= 65) {
+        this.gold -= 65;
+        tonicBought = true;
+        EventBus.emit('gold:changed', this.gold);
+        item4.setTint(0x475569);
+        this.player.statMods.attackSpeedMult = (this.player.statMods.attackSpeedMult || 1.0) * 1.15;
+        this.player.statMods.critChance = (this.player.statMods.critChance || 0.1) + 0.10;
+        this.player.heal(35);
+        try { SoundSynth.playHolySmite(); } catch (e) { }
+        this.juice.emitHolySparks(900, 520, 20);
+        EventBus.emit('notification:show', { text: 'BLESSED TONIC: +15% ATK SPD, +10% CRIT & +35 HP!', color: '#34d399' });
+      } else {
+        EventBus.emit('notification:show', { text: 'NOT ENOUGH GOLD! (NEED 65)', color: '#ef4444' });
+      }
+    };
+
+    item4.on('pointerdown', () => {
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, 900, 520) < 220) buyBlessedTonic();
+    });
+
+    // Item 5: Quintessence Vessel (Skul 3rd Active Skill Slot!)
+    const item5 = this.add.sprite(1015, 520, 'icons_16x16', 241).setScale(2.0).setDepth(5).setInteractive({ useHandCursor: true });
+    this.add.text(1015, 476, '[CLICK / E]\nQUINTESSENCE\n80 GOLD', {
+      fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#e879f9',
+      align: 'center', stroke: '#000', strokeThickness: 3
+    }).setOrigin(0.5).setDepth(20);
+
+    let quintBought = false;
+    const buyQuintessence = () => {
+      if (quintBought) {
+        EventBus.emit('notification:show', { text: 'QUINTESSENCE ALREADY CLAIMED!', color: '#94a3b8' });
+        return;
+      }
+      if (this.gold >= 80) {
+        this.gold -= 80;
+        quintBought = true;
+        EventBus.emit('gold:changed', this.gold);
+        item5.setTint(0x475569);
+        const curId = this.relicSystem.equippedQuintessence ? this.relicSystem.equippedQuintessence.id : null;
+        const pool = QUINTESSENCE_DATABASE.filter(q => q.id !== curId);
+        const chosen = pool[Math.floor(Math.random() * pool.length)] || QUINTESSENCE_DATABASE[0];
+        this.relicSystem.equipQuintessence(chosen);
+        try { SoundSynth.playHolySmite(); } catch (e) { }
+        this.juice.emitVoidEmbers(1015, 520, 22);
+        EventBus.emit('notification:show', { text: `EQUIPPED QUINTESSENCE: ${chosen.name.toUpperCase()} [G]!`, color: '#e879f9' });
+      } else {
+        EventBus.emit('notification:show', { text: 'NOT ENOUGH GOLD! (NEED 80)', color: '#ef4444' });
+      }
+    };
+
+    item5.on('pointerdown', () => {
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, 1015, 520) < 220) buyQuintessence();
     });
 
     this.shopItems = [
-      { x: 360, buy: buyHealthPotion },
-      { x: 680, buy: buyAbyssalElixir },
-      { x: 860, buy: buyRelicCasket }
+      { x: 300, buy: buyHealthPotion },
+      { x: 615, buy: buyAbyssalElixir },
+      { x: 785, buy: buyRelicCasket },
+      { x: 900, buy: buyBlessedTonic },
+      { x: 1015, buy: buyQuintessence }
     ];
   }
 
   buildExpansiveLevelGeometry(worldW, worldH) {
-    // 1. Continuous Seam-Free Floor Segments (Unified Colliders: 100% fixes horizontal snagging/stuck bugs!)
+    // 1. Continuous Seam-Free Floor Segments (TileSprite strips: 10x fewer display objects!)
     const buildFloorSegment = (startX, endX) => {
-      // Visual masonry tiles (Pure visual images, ZERO physics overhead!)
-      for (let x = startX; x < endX; x += 32) {
-        this.add.image(x + 16, 560, 'tile_floor').setDepth(2);
-        this.add.image(x + 16, 592, 'tile_foundation').setDepth(2);
-        this.add.image(x + 16, 624, 'tile_foundation').setDepth(2);
-      }
-      // Single continuous physics collider for the entire floor segment
       const segW = endX - startX;
-      if (segW > 0) {
-        const floorCollider = this.platforms.create(startX + segW / 2, 560, 'tile_floor');
-        floorCollider.setVisible(false);
-        floorCollider.setDisplaySize(segW, 32);
-        floorCollider.refreshBody();
-        floorCollider.body.checkCollision.left = false;
-        floorCollider.body.checkCollision.right = false;
-      }
+      if (segW <= 0) return;
+      const midX = startX + segW / 2;
+      this.add.tileSprite(midX, 560, segW, 32, 'tile_floor').setDepth(2);
+      this.add.tileSprite(midX, 608, segW, 64, 'tile_foundation').setDepth(2);
+
+      // Single continuous physics collider for the entire floor segment
+      const floorCollider = this.platforms.create(midX, 560, 'tile_floor');
+      floorCollider.setVisible(false);
+      floorCollider.setDisplaySize(segW, 32);
+      floorCollider.refreshBody();
+      floorCollider.body.checkCollision.left = false;
+      floorCollider.body.checkCollision.right = false;
     };
 
-    // Helper to build a proper deep chasm with vertical stone walls, visual pit floor, and lethal spikes
+    // Helper to build a proper deep chasm with vertical stone walls (positioned below walking lip so player never snags!)
     const buildDeepChasm = (startX, endX) => {
-      // Visual cliff corners and walls
       this.add.image(startX - 16, 560, 'tile_cliff_corner_left').setDepth(2);
       this.add.image(startX - 16, 592, 'tile_cliff_left').setDepth(2);
       this.add.image(startX - 16, 624, 'tile_cliff_left').setDepth(2);
@@ -542,17 +675,17 @@ export class DungeonScene extends Phaser.Scene {
       this.add.image(endX + 16, 592, 'tile_cliff_right').setDepth(2);
       this.add.image(endX + 16, 624, 'tile_cliff_right').setDepth(2);
 
-      // Single vertical left wall collider
-      const leftWall = this.platforms.create(startX - 16, 592, 'tile_cliff_left');
+      const leftWall = this.platforms.create(startX - 16, 602, 'tile_cliff_left');
       leftWall.setVisible(false);
-      leftWall.setDisplaySize(32, 96);
+      leftWall.setDisplaySize(32, 80);
       leftWall.refreshBody();
+      leftWall.body.checkCollision.up = false;
 
-      // Single vertical right wall collider
-      const rightWall = this.platforms.create(endX + 16, 592, 'tile_cliff_right');
+      const rightWall = this.platforms.create(endX + 16, 602, 'tile_cliff_right');
       rightWall.setVisible(false);
-      rightWall.setDisplaySize(32, 96);
+      rightWall.setDisplaySize(32, 80);
       rightWall.refreshBody();
+      rightWall.body.checkCollision.up = false;
 
       // Visual stone plinth and spikes
       for (let px = startX + 16; px <= endX - 16; px += 32) {
@@ -632,6 +765,14 @@ export class DungeonScene extends Phaser.Scene {
     this.createTorch(780, 390);
     this.createTorch(960, 320);
 
+    if (this.textures.exists('prop_gothic_banner')) {
+      this.add.image(280, 490, 'prop_gothic_banner').setDepth(2).setAlpha(0.85);
+      this.add.image(660, 490, 'prop_gothic_banner').setDepth(2).setAlpha(0.85);
+    }
+    if (this.textures.exists('prop_candelabra')) {
+      this.add.image(460, 522, 'prop_candelabra').setDepth(3);
+    }
+
     this.createUrn(490, 314);
     this.createUrn(550, 314);
     this.createUrn(780, 404);
@@ -645,14 +786,18 @@ export class DungeonScene extends Phaser.Scene {
     this.createPlatformSlab(1860, 270, 5); // Crypt Vault Peak
     this.createPlatformSlab(2060, 400, 5);
 
-    // Ancient Stone Coffins on ground level (breakable for gold!)
+    // Breakable Stone Coffins on ground level
     if (this.textures.exists('prop_coffin')) {
-      this.add.image(1480, 536, 'prop_coffin').setDepth(3);
-      this.add.image(1920, 536, 'prop_coffin').setDepth(3);
+      this.props.add(new BreakableProp(this, 1480, 524, 'prop_coffin'));
+      this.props.add(new BreakableProp(this, 1920, 524, 'prop_coffin'));
+    }
+    if (this.textures.exists('prop_hanging_cage')) {
+      this.add.image(1690, 290, 'prop_hanging_cage').setDepth(2).setAlpha(0.8);
+      this.add.image(2020, 240, 'prop_hanging_cage').setDepth(2).setAlpha(0.8);
     }
     if (this.textures.exists('prop_soul_lantern')) {
-      this.add.image(1400, 530, 'prop_soul_lantern').setDepth(3);
-      this.add.image(2140, 530, 'prop_soul_lantern').setDepth(3);
+      this.add.image(1400, 514, 'prop_soul_lantern').setDepth(3);
+      this.add.image(2140, 514, 'prop_soul_lantern').setDepth(3);
     }
 
     this.createTorch(1400, 400);
@@ -689,9 +834,9 @@ export class DungeonScene extends Phaser.Scene {
     this.createPlatformSlab(3080, 250, 5); // Clockwork Tower Summit
     this.createPlatformSlab(3320, 380, 4);
 
-    // Treasure Chest at Tower Summit!
+    // Breakable Treasure Chest at Tower Summit!
     if (this.textures.exists('prop_chest')) {
-      this.add.image(3140, 226, 'prop_chest').setScale(1.1).setDepth(4);
+      this.props.add(new BreakableProp(this, 3140, 222, 'prop_chest'));
     }
 
     this.createTorch(2580, 390);
@@ -713,6 +858,14 @@ export class DungeonScene extends Phaser.Scene {
     this.createPlatformSlab(4080, 340, 6); // Fortress Battlement
     this.createPlatformSlab(4360, 260, 5); // High Watchtower
     this.createPlatformSlab(4580, 400, 4);
+
+    if (this.textures.exists('prop_gothic_banner')) {
+      this.add.image(3940, 490, 'prop_gothic_banner').setDepth(2).setAlpha(0.85);
+      this.add.image(4420, 490, 'prop_gothic_banner').setDepth(2).setAlpha(0.85);
+    }
+    if (this.textures.exists('prop_hanging_cage')) {
+      this.add.image(4220, 260, 'prop_hanging_cage').setDepth(2).setAlpha(0.85);
+    }
 
     this.createTorch(3860, 400);
     this.createTorch(4140, 300);
@@ -803,6 +956,9 @@ export class DungeonScene extends Phaser.Scene {
           timer.remove();
           return;
         }
+        // Viewport culling: only spawn flame particles when torch is near camera!
+        const camCenter = (this.cameras && this.cameras.main) ? (this.cameras.main.scrollX + 480) : x;
+        if (Math.abs(x - camCenter) > 580) return;
         if (Math.random() > 0.45 && this.juice) {
           const flameX = x + (Math.random() * 4 - 2);
           const flameY = y - 10 + (Math.random() * 3 - 1);
@@ -838,7 +994,7 @@ export class DungeonScene extends Phaser.Scene {
     this.player.setVelocityX(this.player.facing * -140);
     this.juice.addTrauma(0.35);
     this.juice.emitBlood(this.player.x, this.player.y, 10);
-    try { SoundSynth.playHit(); } catch (e) {}
+    try { SoundSynth.playHit(); } catch (e) { }
   }
 
   interactWithShrine() {
@@ -882,17 +1038,9 @@ export class DungeonScene extends Phaser.Scene {
   spawnExpansiveEnemyWave(worldW) {
     const room = this.currentRoom || 1;
 
-    // Helper to spawn and track an enemy
+    // Helper to spawn and track an enemy (shared group colliders handle platforms & hazards!)
     const spawnEnemy = (x, y, type) => {
       const enemy = new Enemy(this, x, y, type);
-      this.physics.add.collider(enemy, this.platforms);
-      // Instant hazard kill overlap
-      this.physics.add.overlap(enemy, this.hazards, () => {
-        if (enemy && enemy.active && !enemy.isDead) {
-          this.juice.emitBlood(enemy.x, enemy.y, 24);
-          enemy.die();
-        }
-      });
       this.enemies.push(enemy);
       this.enemyGroup.add(enemy);
       return enemy;
@@ -911,6 +1059,7 @@ export class DungeonScene extends Phaser.Scene {
     for (let i = 0; i < z2Ghouls; i++) {
       spawnEnemy(1450 + i * 150, 510, 'ghoul');
     }
+    spawnEnemy(1680, 515, 'plague_hound');
     spawnEnemy(1800, 510, 'skeleton');
     spawnEnemy(2050, 510, 'skeleton');
     spawnEnemy(1580, 300, 'cultist');
@@ -933,6 +1082,7 @@ export class DungeonScene extends Phaser.Scene {
     for (let i = 0; i < z4Ghouls; i++) {
       spawnEnemy(3880 + i * 140, 510, 'ghoul');
     }
+    spawnEnemy(4020, 515, 'plague_hound');
     spawnEnemy(4080, 290, 'sorcerer');
     spawnEnemy(4360, 510, 'skeleton');
     if (room >= 2) {
@@ -974,7 +1124,7 @@ export class DungeonScene extends Phaser.Scene {
           color: '#ef4444'
         });
         this.juice.addTrauma(0.5);
-        try { SoundSynth.playRoar(); } catch (e) {}
+        try { SoundSynth.playRoar(); } catch (e) { }
 
         const spawnOffset = (Math.random() > 0.5 ? 260 : -260);
         const spawnX = Phaser.Math.Clamp(this.player.x + spawnOffset, 120, this.worldWidth - 120);
@@ -1075,8 +1225,16 @@ export class DungeonScene extends Phaser.Scene {
     if (this.bgBack && this.cameras && this.cameras.main) {
       this.bgBack.tilePositionX = this.cameras.main.scrollX * 0.08;
     }
+    if (this.bgGraveyard && this.cameras && this.cameras.main) {
+      this.bgGraveyard.tilePositionX = this.cameras.main.scrollX * 0.16;
+    }
     if (this.bgColumns && this.cameras && this.cameras.main) {
       this.bgColumns.tilePositionX = this.cameras.main.scrollX * 0.28;
+    }
+
+    if (this.awaitingRelicChoice) {
+      if (this.player && this.player.body) this.player.setVelocity(0, 0);
+      return;
     }
 
     // Update Player & fail-safe pit rescue bounds
@@ -1091,7 +1249,12 @@ export class DungeonScene extends Phaser.Scene {
       // Real-time Expedition Distance & Zone Tracking (Throttled to prevent canvas font re-rasterization)
       const playerX = Math.round(this.player.x);
       let currentZone = 'Cathedral Nave';
-      if (playerX >= 4900) currentZone = 'Gates of Destiny';
+      if (this.isShopChamber) currentZone = (this.currentRoom === 5 ? 'Black Lab Bazaar' : 'Sacred Bazaar');
+      else if (this.isBossChamber) currentZone = 'Boss Sanctum';
+      else if (this.currentRoom === 1 && playerX < 1250) currentZone = 'Whispering Woods';
+      else if ((this.currentRoom === 7 || this.currentRoom === 8) && playerX < 2460) currentZone = 'Fortress of Fate';
+      else if (this.currentRoom === 11 && playerX < 2460) currentZone = 'Astral Sacred Grounds';
+      else if (playerX >= 4900) currentZone = 'Gates of Destiny';
       else if (playerX >= 3700) currentZone = 'Inquisitor\'s Bastion';
       else if (playerX >= 2460) currentZone = 'Clocktower & Blood Altar';
       else if (playerX >= 1250) currentZone = 'Sunken Crypts';
@@ -1115,6 +1278,25 @@ export class DungeonScene extends Phaser.Scene {
     this.enemies = this.enemies.filter(e => e && e.active && !e.isDead);
     if (this.enemies.length === 0 && !this.roomCleared) {
       this.onRoomCleared();
+    }
+
+    // Anti-Softlock Straggler Converge: If player reached Zone 5 terrace and <=4 foes remain far behind, summon them forward!
+    if (!this.isBossChamber && !this.isShopChamber && !this.roomCleared && this.player && this.player.x > 4950 && this.enemies.length > 0 && this.enemies.length <= 4) {
+      let warped = false;
+      this.enemies.forEach((enemy, idx) => {
+        if (enemy && enemy.active && !enemy.isDead && Math.abs(enemy.x - this.player.x) > 850) {
+          const destX = 5080 + idx * 70;
+          const destY = enemy.isFlying ? 360 : 500;
+          enemy.setPosition(destX, destY);
+          enemy.setVelocity(0, 0);
+          if (enemy.isFlying) enemy.homeY = destY;
+          this.juice.emitVoidEmbers(destX, destY, 16);
+          warped = true;
+        }
+      });
+      if (warped) {
+        EventBus.emit('notification:show', { text: '✦ REMAINING FOES CONVERGE ON THE TERRACE! ✦', color: '#f87171' });
+      }
     }
 
     // Update Enemies with Viewport Distance Culling (Far-away enemies sleep to save CPU & physics cycles)
@@ -1172,9 +1354,9 @@ export class DungeonScene extends Phaser.Scene {
         this.gatePrompt.setPosition(touchingGate.x, touchingGate.y - 88).setVisible(true);
 
         const interactPressed = Phaser.Input.Keyboard.JustDown(this.player.keys.up) ||
-                                Phaser.Input.Keyboard.JustDown(this.player.keys.altUp) ||
-                                Phaser.Input.Keyboard.JustDown(this.player.keys.space) ||
-                                Phaser.Input.Keyboard.JustDown(this.eKey);
+          Phaser.Input.Keyboard.JustDown(this.player.keys.altUp) ||
+          Phaser.Input.Keyboard.JustDown(this.player.keys.space) ||
+          Phaser.Input.Keyboard.JustDown(this.eKey);
         if (interactPressed) {
           this.interactWithGate(touchingGate);
         }
@@ -1201,7 +1383,6 @@ export class DungeonScene extends Phaser.Scene {
         const critMult = 1.5 + ((this.player && this.player.statMods && this.player.statMods.critDamageBonus) || 0);
         const totalDmg = isCrit ? Math.round(damage * critMult) : damage;
         enemy.takeDamage(totalDmg, x, isCrit, isBeast);
-        this.juice.hitStop(step === 2 ? 40 : 20);
 
         // Relic effect: Frenzied Wolf Fang (Bleed application)
         if (enemy.active && !enemy.isDead && this.player && this.player.statMods && Math.random() < (this.player.statMods.bleedChance || 0)) {
@@ -1232,6 +1413,17 @@ export class DungeonScene extends Phaser.Scene {
       const step = (this.player && this.player.comboStep) || 1;
       this.juice.hitStop(step === 3 ? 35 : 18);
       this.juice.addTrauma(step === 3 ? 0.20 : 0.08);
+
+      // Tier 4 Holy Smite Synergy: Radiant Judgement Sky Smite on 3rd combo hit!
+      if (step === 3 && this.player && this.player.statMods && this.player.statMods.holySmiteLightning) {
+        this.juice.emitHolySparks(x, y - 16, 20);
+        try { SoundSynth.playHolySmite(); } catch (e) { }
+        for (const e of this.enemies) {
+          if (e && e.active && !e.isDead && Phaser.Math.Distance.Between(x, y, e.x, e.y) < 120) {
+            e.takeDamage(Math.round(50 * (this.player.statMods.damageMult || 1)), x, true, false);
+          }
+        }
+      }
     }
 
     // Harvest Corruption energy strictly ONCE per attack swing (capped, never multiplied by cleave)
@@ -1291,7 +1483,7 @@ export class DungeonScene extends Phaser.Scene {
     this.juice.emitSparks(sourceX, sourceY, 16);
     try {
       SoundSynth.playRoar();
-    } catch (e) {}
+    } catch (e) { }
 
     // Check player collision with ground shockwave
     if (this.player && this.player.active && !this.player.isDead) {
@@ -1326,33 +1518,10 @@ export class DungeonScene extends Phaser.Scene {
         wave.anims.play('void-crescent-fly');
       }
 
-      // Trailing demonic flame particles
-      const particleTimer = this.time.addEvent({
-        delay: 50,
-        loop: true,
-        callback: () => {
-          if (wave && wave.active) {
-            this.juice.emitVoidEmbers(wave.x - dir * 16, wave.y, 2);
-          } else {
-            particleTimer.remove();
-          }
-        }
-      });
-
-      // Dissipates after 460ms (~150px) preventing infinite screen-clearing cheese
-      this.time.delayedCall(320, () => {
-        if (wave && wave.active) {
-          this.tweens.add({
-            targets: wave,
-            alpha: 0,
-            scaleY: 0.7,
-            duration: 140,
-            onComplete: () => {
-              particleTimer.remove();
-              if (wave && wave.active) wave.destroy();
-            }
-          });
-        }
+      // Dissipates after 440ms without spawning per-projectile loop timers or tweens
+      this.juice.emitVoidEmbers(x, y, 4);
+      this.time.delayedCall(440, () => {
+        if (wave && wave.active) wave.destroy();
       });
     } catch (e) {
       console.warn('Error spawning void wave:', e);
@@ -1376,35 +1545,9 @@ export class DungeonScene extends Phaser.Scene {
         arc.anims.play('holy-arc-fly');
       }
 
-      // Trailing sacred solar sparks & embers
-      const particleTimer = this.time.addEvent({
-        delay: 45,
-        loop: true,
-        callback: () => {
-          if (arc && arc.active) {
-            this.juice.emitHolySparks(arc.x - dir * 16, arc.y, 2);
-          } else {
-            particleTimer.remove();
-          }
-        }
-      });
-
-      this.juice.emitHolySparks(x, y, 6);
-
-      // Dissipates after 460ms (~155px) with graceful fade into sparks
-      this.time.delayedCall(320, () => {
-        if (arc && arc.active) {
-          this.tweens.add({
-            targets: arc,
-            alpha: 0,
-            scaleY: 0.7,
-            duration: 140,
-            onComplete: () => {
-              particleTimer.remove();
-              if (arc && arc.active) arc.destroy();
-            }
-          });
-        }
+      this.juice.emitHolySparks(x, y, 5);
+      this.time.delayedCall(440, () => {
+        if (arc && arc.active) arc.destroy();
       });
     } catch (e) {
       console.warn('Error spawning holy arc:', e);
@@ -1436,7 +1579,7 @@ export class DungeonScene extends Phaser.Scene {
   }
 
   createAtmosphericDustMotes(width, height) {
-    for (let i = 0; i < 35; i++) {
+    for (let i = 0; i < 16; i++) {
       const x = Math.random() * width;
       const y = 30 + Math.random() * 260; // Upper cathedral vault
       const mote = this.add.rectangle(x, y, 2, 2, 0xe2e8f0, 0.45).setScrollFactor(0.25).setDepth(2);
@@ -1479,19 +1622,23 @@ export class DungeonScene extends Phaser.Scene {
     orb.pickupType = 'blood';
     orb.setBounce(0.4);
     orb.setCollideWorldBounds(true);
-    this.physics.add.collider(orb, this.platforms);
   }
 
   spawnBloodQuartz(x, y, count = 1) {
-    const quartz = this.pickups.create(x, y - 10, 'blood_orb');
+    const texKey = this.textures.exists('blood_quartz') ? 'blood_quartz' : 'blood_orb';
+    const quartz = this.pickups.create(x, y - 10, texKey);
     if (!quartz) return;
     quartz.pickupType = 'quartz';
     quartz.quartzAmount = count;
-    quartz.setTint(0xf43f5e);
-    quartz.setScale(1.4);
+    if (texKey === 'blood_quartz' && this.anims.exists('blood-quartz-spin')) {
+      quartz.anims.play('blood-quartz-spin');
+      quartz.setScale(1.15);
+    } else {
+      quartz.setTint(0xf43f5e);
+      quartz.setScale(1.4);
+    }
     quartz.setBounce(0.4);
     quartz.setCollideWorldBounds(true);
-    this.physics.add.collider(quartz, this.platforms);
   }
 
   spawnGoldCoin(x, y) {
@@ -1500,7 +1647,6 @@ export class DungeonScene extends Phaser.Scene {
     coin.pickupType = 'gold';
     coin.setBounce(0.3);
     coin.setCollideWorldBounds(true);
-    this.physics.add.collider(coin, this.platforms);
   }
 
   collectPickup(pickup) {
@@ -1520,7 +1666,7 @@ export class DungeonScene extends Phaser.Scene {
       EventBus.emit('gold:changed', this.gold);
       this.juice.emitSparks(pickup.x, pickup.y, 4);
     } else if (pickup.pickupType === 'quartz') {
-      try { SoundSynth.playHit(); } catch (e) {}
+      try { SoundSynth.playHit(); } catch (e) { }
       const amt = pickup.quartzAmount || 1;
       const meta = MetaProgression.getInstance();
       const total = meta.addBloodQuartz(amt);
@@ -1546,14 +1692,30 @@ export class DungeonScene extends Phaser.Scene {
 
     if (this.isBossChamber) {
       EventBus.emit('boss:defeated');
+      if (this.player && this.player.evolveSkullRank()) {
+        EventBus.emit('notification:show', {
+          text: `★ SKULL AWAKENED TO RANK ${this.player.skullRank}! ★`,
+          color: '#fbbf24'
+        });
+      }
+      if (this.relicSystem && !this.relicSystem.equippedQuintessence) {
+        const chosen = QUINTESSENCE_DATABASE[Math.floor(Math.random() * QUINTESSENCE_DATABASE.length)];
+        this.relicSystem.equipQuintessence(chosen);
+        this.time.delayedCall(900, () => {
+          EventBus.emit('notification:show', {
+            text: `✦ BOSS QUINTESSENCE CLAIMED: ${chosen.name.toUpperCase()} [PRESS G]! ✦`,
+            color: '#e879f9'
+          });
+        });
+      }
     }
 
     EventBus.emit('enemies:count', 0);
     EventBus.emit('room:cleared');
 
     // Show exit guidance arrow towards the right!
-    const exitX = this.isBossChamber ? 1200 : 4490;
-    const exitY = this.isBossChamber ? 140 : 250;
+    const exitX = this.isBossChamber ? 1200 : 5410;
+    const exitY = this.isBossChamber ? 140 : 245;
     this.exitSign.setPosition(exitX, exitY).setVisible(true);
 
     // Spawn Skul Choice Gateways on the Far Right Terrace
@@ -1683,6 +1845,8 @@ export class DungeonScene extends Phaser.Scene {
       this.juice.popDamageNumber(this.player.x, this.player.y - 20, '❖ GOLD VAULT: +150 GOLD & HEAL', 'crit');
       this.proceedToNextRoom();
     } else if (gate.gateType === 'relic') {
+      this.awaitingRelicChoice = true;
+      this.relicModalSource = 'gate';
       SoundSynth.playSlash(3);
       this.juice.emitVoidEmbers(gate.x, gate.y, 25);
       const choices = this.relicSystem.getThreeRandomChoices();
@@ -1691,6 +1855,7 @@ export class DungeonScene extends Phaser.Scene {
       this.isTransitioning = true;
       this.player.addCorruption(60);
       this.player.heal(60);
+      const evolved = this.player.evolveSkullRank();
 
       // Grant Primal Beast Blessing buff from Beast Altar!
       this.relicSystem.addRelic({
@@ -1698,12 +1863,13 @@ export class DungeonScene extends Phaser.Scene {
         name: 'Primal Beast Fury',
         description: '+20% Damage & +25% Corruption Gain.',
         inscriptions: ['Blood Frenzy', 'Abyssal Void'],
+        iconFrame: 318,
         stats: { damageMult: 1.20, corruptionGainMult: 1.25 }
       });
 
       SoundSynth.playRoar();
       this.juice.emitBlood(gate.x, gate.y, 25);
-      this.juice.popDamageNumber(this.player.x, this.player.y - 20, '☠ BUFF: PRIMAL FURY (+20% DMG, +60% CORRUPT)', 'crit');
+      this.juice.popDamageNumber(this.player.x, this.player.y - 20, evolved ? '★ SKULL EVOLVED + PRIMAL FURY!' : '☠ BUFF: PRIMAL FURY', 'crit');
       this.proceedToNextRoom();
     } else if (gate.gateType === 'boss') {
       this.isTransitioning = true;
@@ -1713,18 +1879,16 @@ export class DungeonScene extends Phaser.Scene {
     } else if (gate.gateType === 'victory') {
       this.isTransitioning = true;
       const meta = MetaProgression.getInstance();
-      meta.addBloodQuartz(100);
-      meta.recordRunEnd({ chamber: 10, bossKilled: true });
-      SoundSynth.playRoar();
+      const totalQuartz = meta.addBloodQuartz(100);
+      meta.recordRunEnd({ chamber: 12, bossKilled: true });
+      SoundSynth.playHolySmite();
       this.juice.addTrauma(1.0);
       this.cameras.main.flash(600, 255, 255, 255);
-      EventBus.emit('notification:show', {
-        text: '👑 EXPEDITION CONQUERED! +100 BONUS BLOOD QUARTZ 👑',
-        color: '#facc15'
-      });
-      this.time.delayedCall(2500, () => {
-        this.scene.stop('hud');
-        this.scene.start('sanctuary');
+      EventBus.emit('game:victory', {
+        gold: this.gold,
+        relics: this.relicSystem.equippedRelics.length,
+        bonusQuartz: 100,
+        totalQuartz
       });
     }
   }
@@ -1732,12 +1896,16 @@ export class DungeonScene extends Phaser.Scene {
   proceedToNextRoom() {
     this.isTransitioning = true;
 
-    // Persist corruption, relics, and gold across rooms and page reloads
+    // Persist corruption, relics, quintessence, skull rank, and gold across rooms and page reloads
     try {
       localStorage.setItem('cursed_crusader_corruption', this.player.corruption.toString());
       localStorage.setItem('cursed_crusader_gold', this.gold.toString());
       localStorage.setItem('cursed_crusader_relics', JSON.stringify(this.relicSystem.equippedRelics.map(r => r.id)));
-    } catch (e) {}
+      localStorage.setItem('cursed_crusader_skull_rank', String(this.player.skullRank || 1));
+      if (this.relicSystem.equippedQuintessence) {
+        localStorage.setItem('cursed_crusader_quintessence', this.relicSystem.equippedQuintessence.id);
+      }
+    } catch (e) { }
 
     // Smooth camera fade out
     this.cameras.main.fadeOut(300, 10, 12, 16);
@@ -1749,7 +1917,9 @@ export class DungeonScene extends Phaser.Scene {
         hp: this.player.hp,
         corruption: this.player.corruption,
         relics: this.relicSystem.equippedRelics,
-        potions: this.player ? this.player.potions : undefined
+        potions: this.player ? this.player.potions : undefined,
+        skullRank: this.player ? this.player.skullRank : 1,
+        quintessence: this.relicSystem && this.relicSystem.equippedQuintessence ? this.relicSystem.equippedQuintessence.id : null
       });
     });
   }
