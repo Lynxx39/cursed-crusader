@@ -73,9 +73,22 @@ export class HudScene extends Phaser.Scene {
         }
       }
       if (d.isBossChamber && d.boss && d.boss.active) {
-        this.showBossBar({ name: d.boss.enemyType, maxHp: d.boss.maxHp });
+        const bossTitles = {
+          general_vane: 'GENERAL VANE THE IRON EXECUTIONER',
+          malakor: 'HIGH INQUISITOR MALAKOR',
+          belial: 'VOID ARCH-SERAPH BELIAL',
+          cursed_king: 'THE CURSED KING ALDOUS'
+        };
+        this.showBossBar({ name: bossTitles[d.boss.enemyType] || 'CHAMBER BOSS', maxHp: d.boss.maxHp });
       }
+      this.updateAwakenSlot(d.player.corruption, d.player.isAwakened);
     }
+
+    // Subtle red edge damage flash overlay
+    this.damageFlash = this.add.rectangle(480, 270, 956, 536, 0x000000, 0)
+      .setStrokeStyle(10, 0xef4444, 0)
+      .setDepth(45);
+    this.damageFlash.setVisible(false);
   }
 
   createHealthAndCorruptionBars() {
@@ -276,12 +289,31 @@ export class HudScene extends Phaser.Scene {
       this.swapFormText.setText(isBerserker ? '⚔️ [TAB] BERSERKER' : '🛡️ [TAB] CRUSADER');
       this.swapFormText.setColor(isBerserker ? '#ef4444' : '#38bdf8');
     }
+    if (this.swapSlotLabel && !this._swapOnCd) {
+      const isBerserker = form === 'berserker';
+      this.swapSlotLabel.setText(isBerserker ? 'BEAST' : 'KNIGHT').setColor(isBerserker ? '#f87171' : '#38bdf8');
+      this.swapSlotBg?.setStrokeStyle(1.5, isBerserker ? 0xef4444 : 0x38bdf8);
+      if (this.swapSlotIcon && this.textures.exists('icons_16x16')) {
+        this.swapSlotIcon.setFrame(isBerserker ? 302 : 295);
+      }
+    }
   }
 
   updateSwapCooldown(cd) {
+    this._swapOnCd = cd > 0;
     if (this.swapFormText && cd > 0) {
       this.swapFormText.setText(`⏳ SWAP (${cd.toFixed(1)}s)`);
       this.swapFormText.setColor('#facc15');
+    }
+    if (this.swapSlotLabel) {
+      if (cd > 0) {
+        this.swapSlotLabel.setText(`${cd.toFixed(1)}s`).setColor('#facc15');
+        this.swapSlotBg?.setStrokeStyle(1.5, 0x475569);
+      } else {
+        const d = this.scene.get('dungeon');
+        const form = (d && d.player && d.player.activeForm) || 'crusader';
+        this.updateForm(form);
+      }
     }
   }
 
@@ -294,53 +326,111 @@ export class HudScene extends Phaser.Scene {
   }
 
   createRelicsDisplay() {
-    this.relicSlotContainer = this.add.container(16, 466).setDepth(20);
-    // Dark gothic belt plate (expanded to fit up to 8 relic icons + Tier 4 synergies cleanly)
-    const beltPlate = this.add.rectangle(309, 12, 618, 26, 0x070a12, 0.88)
+    // Top-Left Relic Belt directly under Player HP / Corruption / Awaken block
+    this.relicSlotContainer = this.add.container(16, 108).setDepth(20);
+    this.relicBeltPlate = this.add.rectangle(128, 18, 256, 38, 0x070a12, 0.88)
       .setStrokeStyle(1, 0x334155);
-    const label = this.add.text(8, 12, 'RELICS:', {
-      fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#94a3b8'
+    const label = this.add.text(8, 10, 'RELICS:', {
+      fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#94a3b8'
     }).setOrigin(0, 0.5);
 
-    this.relicsText = this.add.text(60, 12, 'None acquired', {
-      fontFamily: 'monospace', fontSize: '10px', color: '#64748b'
+    this.relicsText = this.add.text(56, 10, 'None acquired', {
+      fontFamily: 'monospace', fontSize: '9px', color: '#64748b'
     }).setOrigin(0, 0.5);
 
     this.relicIconsGroup = [];
-    this.relicSlotContainer.add([beltPlate, label, this.relicsText]);
+    this.relicSlotContainer.add([this.relicBeltPlate, label, this.relicsText]);
 
-    // Skul-Style Active Skill [Q], Quintessence [G], & Skull Rank Plate (bottom-right, clear of Relic Belt)
-    this.skillSlotContainer = this.add.container(644, 466).setDepth(20);
-    const skillPlate = this.add.rectangle(150, 12, 300, 26, 0x070a12, 0.88)
-      .setStrokeStyle(1, 0x334155);
-    this.skillText = this.add.text(10, 12, '[Q] SKILL: READY', {
-      fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#38bdf8'
-    }).setOrigin(0, 0.5);
-    this.quintText = this.add.text(140, 12, '[G] QUINT: —', {
-      fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#64748b'
-    }).setOrigin(0, 0.5);
-    this.skullRankText = this.add.text(290, 12, '★I', {
-      fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: '#fbbf24'
-    }).setOrigin(1, 0.5);
-    this.skillSlotContainer.add([skillPlate, this.skillText, this.quintText, this.skullRankText]);
+    // Bold Skul-Style Bottom-Center 4-Slot Skill & Action Dock ([Q], [G], [TAB], [U])
+    this.skillSlotContainer = this.add.container(480, 480).setDepth(24);
+    const hasIcons = this.textures.exists('icons_16x16');
+    const slotW = 78;
+    const slotH = 42;
+    const gap = 8;
+    const totalDockW = slotW * 4 + gap * 3 + 16;
+
+    const dockBg = this.add.rectangle(0, 0, totalDockW, 50, 0x050810, 0.90)
+      .setStrokeStyle(1.5, 0x334155);
+    this.skillSlotContainer.add(dockBg);
+
+    const makeSlot = (idx, keyTag, iconFrame, accentHex, accentStr, initLabel) => {
+      const sx = (idx - 1.5) * (slotW + gap);
+      const bg = this.add.rectangle(sx, 0, slotW, slotH, 0x0b1120, 0.95)
+        .setStrokeStyle(1.5, accentHex);
+      const keyBadge = this.add.text(sx - slotW / 2 + 5, -slotH / 2 + 4, `[${keyTag}]`, {
+        fontFamily: 'monospace', fontSize: '9px', fontStyle: 'bold', color: '#fbbf24'
+      }).setOrigin(0, 0);
+      let icon = null;
+      if (hasIcons) {
+        icon = this.add.image(sx - 18, 5, 'icons_16x16', iconFrame).setScale(1.45);
+      }
+      const status = this.add.text(sx + 14, 5, initLabel, {
+        fontFamily: 'monospace', fontSize: '10px', fontStyle: 'bold', color: accentStr
+      }).setOrigin(0.5);
+      this.skillSlotContainer.add(icon ? [bg, keyBadge, icon, status] : [bg, keyBadge, status]);
+      return { bg, keyBadge, icon, status, sx };
+    };
+
+    const qSlot = makeSlot(0, 'Q', 343, 0x38bdf8, '#38bdf8', 'READY');
+    this.skillSlotBg = qSlot.bg;
+    this.skillText = qSlot.status;
+
+    const gSlot = makeSlot(1, 'G', 241, 0x475569, '#64748b', 'EMPTY');
+    this.quintSlotBg = gSlot.bg;
+    this.quintSlotIcon = gSlot.icon;
+    this.quintText = gSlot.status;
+
+    const tabSlot = makeSlot(2, 'TAB', 295, 0x38bdf8, '#38bdf8', 'KNIGHT');
+    this.swapSlotBg = tabSlot.bg;
+    this.swapSlotIcon = tabSlot.icon;
+    this.swapSlotLabel = tabSlot.status;
+    this.skullRankText = this.add.text(tabSlot.sx + slotW / 2 - 5, -slotH / 2 + 4, '★I', {
+      fontFamily: 'monospace', fontSize: '9.5px', fontStyle: 'bold', color: '#fbbf24'
+    }).setOrigin(1, 0);
+    this.skillSlotContainer.add(this.skullRankText);
+
+    const uSlot = makeSlot(3, 'U', 129, 0x7e22ce, '#c084fc', '0%');
+    this.awakenSlotBg = uSlot.bg;
+    this.awakenSlotText = uSlot.status;
+  }
+
+  updateAwakenSlot(corruption = 0, isAwakened = false) {
+    if (!this.awakenSlotText || !this.awakenSlotBg) return;
+    if (isAwakened) {
+      this.awakenSlotText.setText('BEAST').setColor('#ef4444');
+      this.awakenSlotBg.setStrokeStyle(2, 0xef4444);
+    } else if (corruption >= 100) {
+      this.awakenSlotText.setText('READY!').setColor('#f87171');
+      this.awakenSlotBg.setStrokeStyle(2, 0xef4444);
+    } else {
+      this.awakenSlotText.setText(`${Math.round(corruption)}%`).setColor('#c084fc');
+      this.awakenSlotBg.setStrokeStyle(1.5, 0x7e22ce);
+    }
   }
 
   updateSkillCooldown(cd) {
     if (!this.skillText) return;
     if (cd > 0) {
-      this.skillText.setText(`[Q] SKILL: ${cd.toFixed(1)}s`).setColor('#facc15');
+      this.skillText.setText(`${cd.toFixed(1)}s`).setColor('#facc15');
+      this.skillSlotBg?.setStrokeStyle(1.5, 0x475569);
     } else {
-      this.skillText.setText('[Q] SKILL: READY').setColor('#38bdf8');
+      this.skillText.setText('READY').setColor('#38bdf8');
+      this.skillSlotBg?.setStrokeStyle(1.5, 0x38bdf8);
     }
   }
 
   updateQuintessence(q) {
     this.equippedQuintName = q ? q.name.split(' ')[0].toUpperCase() : null;
+    if (this.quintSlotIcon && q && q.iconFrame !== undefined && this.textures.exists('icons_16x16')) {
+      this.quintSlotIcon.setFrame(q.iconFrame);
+    }
     if (this.quintText) {
       if (this.equippedQuintName) {
-        this.quintText.setText(`[G] ${this.equippedQuintName}`).setColor('#e879f9');
+        this.quintText.setText('READY').setColor('#e879f9');
+        this.quintSlotBg?.setStrokeStyle(1.5, 0xe879f9);
       } else {
-        this.quintText.setText('[G] QUINT: —').setColor('#64748b');
+        this.quintText.setText('EMPTY').setColor('#64748b');
+        this.quintSlotBg?.setStrokeStyle(1.5, 0x475569);
       }
     }
   }
@@ -348,9 +438,11 @@ export class HudScene extends Phaser.Scene {
   updateQuintCooldown(cd) {
     if (!this.quintText || !this.equippedQuintName) return;
     if (cd > 0) {
-      this.quintText.setText(`[G] ${cd.toFixed(0)}s`).setColor('#facc15');
+      this.quintText.setText(`${cd.toFixed(0)}s`).setColor('#facc15');
+      this.quintSlotBg?.setStrokeStyle(1.5, 0x475569);
     } else {
-      this.quintText.setText(`[G] ${this.equippedQuintName}`).setColor('#e879f9');
+      this.quintText.setText('READY').setColor('#e879f9');
+      this.quintSlotBg?.setStrokeStyle(1.5, 0xe879f9);
     }
   }
 
@@ -362,7 +454,7 @@ export class HudScene extends Phaser.Scene {
   }
 
   createNotificationBanner() {
-    this.banner = this.add.text(480, 100, '', {
+    this.banner = this.add.text(480, 104, '', {
       fontFamily: 'monospace', fontSize: '20px', fontStyle: 'bold', color: '#fbbf24',
       stroke: '#000000', strokeThickness: 5, align: 'center'
     }).setOrigin(0.5).setAlpha(0).setDepth(25);
@@ -380,15 +472,15 @@ export class HudScene extends Phaser.Scene {
     });
   }
 
-  // Boss HP Bar at Bottom Center (Soulsborne Style — Zero overlap with Player/Top HUD)
+  // Boss HP Bar at Top Center (completely clear of Boss Arena floor & Player/Gold HUD!)
   createBossBar() {
-    this.bossBarContainer = this.add.container(480, 442).setVisible(false).setDepth(25);
+    this.bossBarContainer = this.add.container(500, 36).setVisible(false).setDepth(25);
 
-    const bg = this.add.rectangle(0, 0, 460, 18, 0x05070a, 0.92).setStrokeStyle(2, 0xdc2626);
-    this.bossHpFill = this.add.rectangle(-226, -6, 452, 12, 0xb91c1c).setOrigin(0, 0);
-    const phaseTick = this.add.rectangle(0, 0, 2, 18, 0xfbbf24, 0.85);
+    const bg = this.add.rectangle(0, 0, 390, 16, 0x05070a, 0.94).setStrokeStyle(2, 0xdc2626);
+    this.bossHpFill = this.add.rectangle(-191, -5, 382, 10, 0xb91c1c).setOrigin(0, 0);
+    const phaseTick = this.add.rectangle(0, 0, 2, 16, 0xfbbf24, 0.9);
     this.bossNameText = this.add.text(0, -18, '⚔ HIGH INQUISITOR MALAKOR ⚔', {
-      fontFamily: 'Cinzel, monospace', fontSize: '13px', fontStyle: 'bold', color: '#f87171',
+      fontFamily: 'Cinzel, monospace', fontSize: '12px', fontStyle: 'bold', color: '#f87171',
       stroke: '#05070a', strokeThickness: 4
     }).setOrigin(0.5);
 
@@ -397,7 +489,7 @@ export class HudScene extends Phaser.Scene {
 
   showBossBar({ name, maxHp }) {
     this.bossNameText.setText(`⚔ ${name.toUpperCase()} ⚔`);
-    this.bossHpFill.width = 452;
+    this.bossHpFill.width = 382;
     this.bossBarContainer.setVisible(true);
     if (this.progressContainer) this.progressContainer.setVisible(false);
   }
@@ -407,7 +499,7 @@ export class HudScene extends Phaser.Scene {
     this.tweens.killTweensOf(this.bossHpFill);
     this.tweens.add({
       targets: this.bossHpFill,
-      width: ratio * 452,
+      width: ratio * 382,
       duration: 150
     });
   }
@@ -580,6 +672,20 @@ export class HudScene extends Phaser.Scene {
   updateHp(current, max) {
     const safeMax = (max !== undefined && !isNaN(max) && max > 0) ? max : 150;
     const safeCur = (current !== undefined && !isNaN(current)) ? Math.max(0, Math.round(current)) : safeMax;
+    const tookHit = (this._prevHpValue !== undefined && safeCur < this._prevHpValue);
+    this._prevHpValue = safeCur;
+
+    if (tookHit && this.damageFlash) {
+      this.damageFlash.setVisible(true).setAlpha(1).setStrokeStyle(12, 0xef4444, 0.75);
+      this.tweens.killTweensOf(this.damageFlash);
+      this.tweens.add({
+        targets: this.damageFlash,
+        alpha: 0,
+        duration: 240,
+        onComplete: () => this.damageFlash?.setVisible(false)
+      });
+    }
+
     const ratio = Math.max(0, Math.min(1, safeCur / safeMax));
     const barW = 210;
     this.hpFillBar.width = ratio * barW;
@@ -618,6 +724,8 @@ export class HudScene extends Phaser.Scene {
       this.awakenPrompt.setVisible(false);
       this.corruptionBar.setFillStyle(0xa855f7);
     }
+    const d = this.scene.get('dungeon');
+    this.updateAwakenSlot(safeCur, Boolean(d && d.player && d.player.isAwakened));
   }
 
   showBeastBanner({ formType, duration }) {
@@ -625,11 +733,13 @@ export class HudScene extends Phaser.Scene {
     this.beastStatusText.setVisible(true);
     this.beastStatusText.setText(`[AWAKENED: ${formType.toUpperCase()}] - [I]: FINISHER`);
     this.showBanner(`⚔ AWAKENED: ${formType.toUpperCase()}! ⚔`, '#ef4444');
+    this.updateAwakenSlot(100, true);
   }
 
   hideBeastBanner() {
     this.beastStatusText.setVisible(false);
     this.showBanner('REVERTED TO HOLY KNIGHT', '#38bdf8');
+    this.updateAwakenSlot(0, false);
   }
 
   updateRelics({ all, synergies }) {
@@ -640,7 +750,7 @@ export class HudScene extends Phaser.Scene {
 
     const list = all || [];
     if (list.length === 0) {
-      this.relicsText.setText('None acquired').setVisible(true);
+      this.relicsText.setPosition(56, 10).setText('None acquired').setColor('#64748b').setVisible(true);
       return;
     }
 
@@ -652,22 +762,21 @@ export class HudScene extends Phaser.Scene {
 
     if (hasIcons) {
       this.relicsText.setVisible(true);
-      const maxShown = Math.min(list.length, 7);
+      const maxShown = Math.min(list.length, 8);
       for (let i = 0; i < maxShown; i++) {
         const r = list[i];
-        const ix = 68 + i * 22;
-        const slot = this.add.rectangle(ix, 12, 18, 18, 0x0f172a).setStrokeStyle(1, 0x7e22ce);
-        const icon = this.add.image(ix, 12, 'icons_16x16', r.iconFrame || 127);
+        const ix = 62 + i * 22;
+        const slot = this.add.rectangle(ix, 11, 18, 18, 0x0f172a).setStrokeStyle(1, 0x7e22ce);
+        const icon = this.add.image(ix, 11, 'icons_16x16', r.iconFrame || 127);
         this.relicSlotContainer.add([slot, icon]);
         this.relicIconsGroup.push(slot, icon);
       }
-      const textX = 68 + maxShown * 22 + 4;
-      this.relicsText.setPosition(textX, 12);
       const extra = list.length > maxShown ? `+${list.length - maxShown} ` : '';
+      this.relicsText.setPosition(8, 28);
       this.relicsText.setText(`${extra}${synStr || `${list.length} active`}`).setColor('#c084fc');
     } else {
       const names = list.map(r => r.name).slice(0, 2).join(', ');
-      this.relicsText.setPosition(60, 12).setText(`${names}${list.length > 2 ? ` +${list.length - 2}` : ''}`);
+      this.relicsText.setPosition(56, 10).setText(`${names}${list.length > 2 ? ` +${list.length - 2}` : ''}`);
     }
   }
 

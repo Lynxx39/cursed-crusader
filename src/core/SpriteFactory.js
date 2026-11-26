@@ -1100,6 +1100,48 @@ export class SpriteFactory {
       ctx.fillRect(5, 14, 2, 1);
       scene.textures.addCanvas('icon_telegraph', c);
     }
+
+    // Crisp golden-cyan 4-point Parry Glint star for readable enemy attack parry timing
+    if (!scene.textures.exists('fx_parry_glint')) {
+      const c = document.createElement('canvas');
+      c.width = 28; c.height = 28;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(13, 1, 2, 26);
+      ctx.fillRect(1, 13, 26, 2);
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(12, 5, 4, 18);
+      ctx.fillRect(5, 12, 18, 4);
+      ctx.fillRect(9, 9, 10, 10);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(12, 10, 4, 8);
+      ctx.fillRect(10, 12, 8, 4);
+      scene.textures.addCanvas('fx_parry_glint', c);
+    }
+
+    // Crimson-orange enemy melee slash crescent (faces RIGHT natively)
+    if (!scene.textures.exists('fx_enemy_slash')) {
+      const c = document.createElement('canvas');
+      c.width = 48; c.height = 48;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      for (let y = 4; y <= 43; y++) {
+        const v = (y - 24.0) / 19.0;
+        if (Math.abs(v) > 0.96) continue;
+        const arcX = Math.round(14 + Math.cos(v * 1.4) * 26);
+        const w = Math.max(2, Math.round((1 - Math.abs(v) * 0.55) * 9));
+        ctx.fillStyle = '#7f1d1d';
+        ctx.fillRect(arcX - w - 2, y, w + 3, 1);
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(arcX - w, y, w + 1, 1);
+        ctx.fillStyle = '#fb923c';
+        ctx.fillRect(arcX - Math.ceil(w * 0.45), y, Math.max(2, Math.floor(w * 0.5)), 1);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(arcX - 1, y, 2, 1);
+      }
+      scene.textures.addCanvas('fx_enemy_slash', c);
+    }
   }
 }
 

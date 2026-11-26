@@ -1312,7 +1312,22 @@ export class DungeonScene extends Phaser.Scene {
       }
     }
 
-    // Pickups
+    // Pickups + smooth magnetic pull toward player
+    if (this.pickups && this.player && this.player.active && !this.player.isDead) {
+      const magnetRadius = this.roomCleared ? 480 : 145;
+      for (const pickup of this.pickups.getChildren()) {
+        if (!pickup || !pickup.active || !pickup.body) continue;
+        const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, pickup.x, pickup.y);
+        if (dist > 6 && dist < magnetRadius) {
+          const angle = Phaser.Math.Angle.Between(pickup.x, pickup.y, this.player.x, this.player.y);
+          const pullSpeed = this.roomCleared ? 340 : 210;
+          pickup.setVelocityX(Math.cos(angle) * pullSpeed);
+          if (this.roomCleared || pickup.y > this.player.y + 12) {
+            pickup.setVelocityY(Math.sin(angle) * pullSpeed);
+          }
+        }
+      }
+    }
     this.physics.overlap(this.player, this.pickups, (player, pickup) => {
       this.collectPickup(pickup);
     });
@@ -1485,6 +1500,22 @@ export class DungeonScene extends Phaser.Scene {
     try {
       SoundSynth.playRoar();
     } catch (e) { }
+
+    // Visible crimson-amber ground shockwave surges rushing left & right
+    [-1, 1].forEach((dir) => {
+      const wave = this.add.rectangle(sourceX + dir * 10, sourceY - 6, 20, 10, 0xef4444, 0.9)
+        .setStrokeStyle(1.5, 0xfbbf24).setDepth(22);
+      this.tweens.add({
+        targets: wave,
+        x: sourceX + dir * radius,
+        scaleX: 1.8,
+        scaleY: 0.4,
+        alpha: 0,
+        duration: 240,
+        ease: 'Cubic.easeOut',
+        onComplete: () => wave.destroy()
+      });
+    });
 
     // Check player collision with ground shockwave
     if (this.player && this.player.active && !this.player.isDead) {

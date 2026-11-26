@@ -190,6 +190,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.state = 'CHASE';
     this.attackCooldown = 0.5;
     this.telegraphTimer = 0;
+    this.windupDir = -1;
     this.staggerTimer = 0;
     this.pounceCooldown = 2.0;
     this.teleportCooldown = 2.5;
@@ -198,6 +199,53 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.chargeDir = 1;
     this.isDead = false;
     this.bossTeleportCooldown = 5.0;
+    this.parryGlint = null;
+    this.windupWarnBox = null;
+    this.hpBarBg = null;
+    this.hpBarFill = null;
+
+    this.on('destroy', () => {
+      this.cleanupTelegraphFx();
+      this.cleanupHpBar();
+    });
+  }
+
+  cleanupTelegraphFx() {
+    if (this.parryGlint) {
+      this.parryGlint.destroy();
+      this.parryGlint = null;
+    }
+    if (this.windupWarnBox) {
+      this.windupWarnBox.destroy();
+      this.windupWarnBox = null;
+    }
+  }
+
+  cleanupHpBar() {
+    if (this.hpBarBg) {
+      this.hpBarBg.destroy();
+      this.hpBarBg = null;
+    }
+    if (this.hpBarFill) {
+      this.hpBarFill.destroy();
+      this.hpBarFill = null;
+    }
+  }
+
+  updateMiniHpBar() {
+    if (this.isBoss || this.isDead || !this.active || !this.scene || this.hp >= this.maxHp) return;
+    const barW = this.enemyType === 'elite' ? 40 : 30;
+    const barY = this.y - (this.enemyType === 'elite' ? 44 : 34);
+    if (!this.hpBarBg) {
+      this.hpBarBg = this.scene.add.rectangle(this.x, barY, barW + 2, 5, 0x05070a, 0.85)
+        .setStrokeStyle(1, 0x334155).setDepth(22);
+      this.hpBarFill = this.scene.add.rectangle(this.x - barW / 2, barY, barW, 3, 0xef4444)
+        .setOrigin(0, 0.5).setDepth(23);
+    }
+    this.hpBarBg.setPosition(this.x, barY);
+    const ratio = Math.max(0, Math.min(1, this.hp / Math.max(1, this.maxHp)));
+    this.hpBarFill.setPosition(this.x - barW / 2, barY);
+    this.hpBarFill.width = ratio * barW;
   }
 
   restoreTint() {
@@ -236,12 +284,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    // Keep grounded drop shadow aligned with enemy feet
+    // Keep grounded drop shadow & mini HP bar aligned with enemy
     if (this.shadow) {
       const shadowY = (this.isElite || this.enemyType === 'elite' || this.isBoss) ? this.y + 36 : this.y + 24;
       this.shadow.setPosition(this.x, shadowY);
       this.shadow.setVisible(!this.isDead && this.visible);
     }
+    this.updateMiniHpBar();
 
     // Cooldown management
     if (this.attackCooldown > 0) this.attackCooldown -= dt;
@@ -258,6 +307,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
     // Handle Staggered state (from Player Parry)
     if (this.state === 'STAGGERED') {
+      this.cleanupTelegraphFx();
       this.setVelocityX(0);
       if (this.isFlying) this.setVelocityY(0);
       this.staggerTimer -= dt;
@@ -265,6 +315,36 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       if (this.staggerTimer <= 0) {
         this.restoreTint();
         this.state = 'CHASE';
+      }
+      return;
+    }
+
+    // Handle Ground Melee Windup + Parry Telegraph state (Standard readability!)
+    if (this.state === 'MELEE_WINDUP') {
+      this.setVelocityX(0);
+      const wDir = this.windupDir || (player.x > this.x ? 1 : -1);
+      this.setFlipX(wDir > 0);
+      if (this.parryGlint && this.parryGlint.scene) {
+        const pulse = 1.0 + Math.sin(time * 0.03) * 0.25;
+        this.parryGlint.setPosition(this.x + wDir * 22, this.y - 14).setScale(pulse);
+      }
+      if (this.windupWarnBox && this.windupWarnBox.scene) {
+        this.windupWarnBox.setPosition(this.x + wDir * ((this.attackRange + 16) * 0.5), this.y + 8);
+      }
+
+      // Responsive Parry detection right during golden glint windup!
+      if (player.isParrying && Math.abs(player.x - this.x) < 95 && Math.abs(player.y - this.y) < 68) {
+        this.cleanupTelegraphFx();
+        player.onSuccessfulParry(this);
+        this.state = 'STAGGERED';
+        this.staggerTimer = 1.8;
+        this.attackCooldown = 1.8;
+        return;
+      }
+
+      this.telegraphTimer -= dt;
+      if (this.telegraphTimer <= 0) {
+        this.executeMeleeStrike(player, wDir);
       }
       return;
     }
@@ -896,9 +976,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
 
     if (this.enemyType === 'cultist') {
+      this.state = 'ATTACK';
       if (this.scene && typeof this.scene.spawnEnemyProjectile === 'function') {
         if (this.isBoss) {
-          const volleyCount = this.bossPhase === 2 ? 5 : 3;
           const spreadAngles = this.bossPhase === 2 ? [-0.35, -0.18, 0, 0.18, 0.35] : [-0.22, 0, 0.22];
           spreadAngles.forEach((angle, idx) => {
             this.scene.time.delayedCall(idx * 80, () => {
@@ -915,27 +995,91 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         }
       }
       this.attackCooldown = this.isBoss ? (this.bossPhase === 2 ? 1.4 : 2.0) : 2.2;
-    } else {
-      // Melee Slash Hitbox
-      if (!player.isDashing) {
-        player.takeDamage(this.damage, this.x);
-      }
-      this.attackCooldown = 1.4;
+      this.scene.time.delayedCall(300, () => {
+        if (this.active && this.state === 'ATTACK' && !this.isDead) {
+          this.state = 'CHASE';
+          if (this.scene.anims.exists('wizard-idle')) {
+            this.anims.play('wizard-idle', true);
+          }
+        }
+      });
+      return;
+    }
 
-      if (this.enemyType === 'elite' && this.scene && typeof this.scene.triggerEnemySlamShockwave === 'function') {
-        this.scene.triggerEnemySlamShockwave(this.x, this.y + 24, 110, Math.round(this.damage * 0.75));
+    // Standard Ground / Melee Attack Windup with Golden Parry Glint + Ground Danger Zone
+    this.cleanupTelegraphFx();
+    this.state = 'MELEE_WINDUP';
+    this.windupDir = dir;
+    this.telegraphTimer = this.isBoss ? 0.42 : 0.36;
+    this.setVelocityX(0);
+    this.setTint(0xfbbf24);
+    this.showTelegraphWarning();
+
+    if ((this.enemyType === 'skeleton' || this.enemyType === 'general_vane') && this.scene.anims.exists('skeleton-attack')) {
+      this.anims.play('skeleton-attack', true);
+    }
+
+    const reach = this.attackRange + 16;
+    if (this.scene && this.scene.textures && this.scene.textures.exists('fx_parry_glint')) {
+      this.parryGlint = this.scene.add.image(this.x + dir * 22, this.y - 14, 'fx_parry_glint')
+        .setDepth(26).setScale(1.1);
+    }
+    if (this.scene && this.scene.add) {
+      this.windupWarnBox = this.scene.add.rectangle(this.x + dir * (reach * 0.5), this.y + 8, reach, 26, 0xef4444, 0.22)
+        .setStrokeStyle(1, 0xfbbf24, 0.85).setDepth(18);
+    }
+  }
+
+  executeMeleeStrike(player, dir) {
+    if (!this.active || !this.body || this.isDead) return;
+    this.cleanupTelegraphFx();
+    this.restoreTint();
+    this.state = 'ATTACK';
+    this.attackCooldown = this.isBoss ? 1.3 : 1.45;
+
+    // Visible crimson-orange enemy slash crescent!
+    if (this.scene && this.scene.textures && this.scene.textures.exists('fx_enemy_slash')) {
+      const slash = this.scene.add.image(this.x + dir * 26, this.y, 'fx_enemy_slash')
+        .setFlipX(dir < 0)
+        .setScale(this.isBoss ? 1.55 : 1.1)
+        .setDepth(24);
+      this.scene.tweens.add({
+        targets: slash,
+        x: slash.x + dir * 20,
+        alpha: 0,
+        duration: 165,
+        onComplete: () => slash.destroy()
+      });
+    }
+    if (this.scene && this.scene.juice) {
+      this.scene.juice.emitSparks(this.x + dir * 26, this.y, 6);
+    }
+
+    if (player && player.active && !player.isDead) {
+      if (player.isParrying && Math.abs(player.x - this.x) < 95 && Math.abs(player.y - this.y) < 68) {
+        player.onSuccessfulParry(this);
+        this.state = 'STAGGERED';
+        this.staggerTimer = 1.8;
+        this.attackCooldown = 1.8;
+        return;
       }
-      if (this.enemyType === 'general_vane' && this.scene && typeof this.scene.triggerEnemySlamShockwave === 'function') {
-        this.scene.triggerEnemySlamShockwave(this.x, this.y + 28, 140, Math.round(this.damage * 0.85));
+      const inHoriz = Math.abs(player.x - this.x) <= this.attackRange + 26;
+      const inVert = Math.abs(player.y - this.y) <= 58;
+      if (inHoriz && inVert && !player.isDashing) {
+        player.takeDamage(this.damage, this.x);
       }
     }
 
-    this.scene.time.delayedCall(300, () => {
-      if (this.active && this.state !== 'STAGGERED' && !this.isDead) {
+    if (this.enemyType === 'elite' && this.scene && typeof this.scene.triggerEnemySlamShockwave === 'function') {
+      this.scene.triggerEnemySlamShockwave(this.x, this.y + 24, 115, Math.round(this.damage * 0.75));
+    }
+    if (this.enemyType === 'general_vane' && this.scene && typeof this.scene.triggerEnemySlamShockwave === 'function') {
+      this.scene.triggerEnemySlamShockwave(this.x, this.y + 28, 145, Math.round(this.damage * 0.85));
+    }
+
+    this.scene.time.delayedCall(260, () => {
+      if (this.active && this.state === 'ATTACK' && !this.isDead) {
         this.state = 'CHASE';
-        if (this.enemyType === 'cultist' && this.scene.anims.exists('wizard-idle')) {
-          this.anims.play('wizard-idle', true);
-        }
       }
     });
   }
@@ -1010,12 +1154,16 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
     if (this.hp <= 0) {
       this.die();
+    } else {
+      this.updateMiniHpBar();
     }
   }
 
   die() {
     if (this.isDead) return;
     this.isDead = true;
+    this.cleanupTelegraphFx();
+    this.cleanupHpBar();
     if (this.body) this.setVelocity(0, 0);
 
     if (this.shadow) {
